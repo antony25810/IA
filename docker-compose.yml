@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # PostgreSQL con PostGIS
+  postgres:
+    image: postgis/postgis:15-3.4
+    container_name: turismo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: turismo_user
+      POSTGRES_PASSWORD: turismo_pass_2025
+      POSTGRES_DB: turismo_personalizado
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U turismo_user -d turismo_personalizado"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - turismo_network
+
+  # Redis para cache
+  redis:
+    image: redis:7-alpine
+    container_name: turismo_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - turismo_network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: turismo_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://turismo_user:turismo_pass_2025@postgres:5432/turismo_personalizado
+      - DATABASE_URL_ASYNC=postgresql+asyncpg://turismo_user:turismo_pass_2025@postgres:5432/turismo_personalizado
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - turismo_network
+    command: uvicorn api_gateway.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # PgAdmin (opcional, para administrar la BD)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: turismo_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@turismo.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - turismo_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  turismo_network:
+    driver: bridge
