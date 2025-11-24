@@ -5,6 +5,7 @@ Endpoints REST para optimización de rutas con A*
 from typing import Optional, List, Dict
 from fastapi import APIRouter, Depends, Query, Body, status
 from sqlalchemy.orm import Session
+from typing import Union
 
 from shared.database.base import get_db
 from .service import RouterOptimizerService
@@ -35,7 +36,7 @@ def optimize_route(
         pattern="^(euclidean|manhattan|zero)$",
         description="Tipo de heurística"
     ),
-    attraction_scores: Optional[Dict[int, float]] = Body(
+    attraction_scores: Optional[Dict[Union[int, str], float]] = Body(
         None,
         description="Scores de idoneidad por atracción (opcional)"
     ),
@@ -99,7 +100,7 @@ def optimize_multi_stop_route(
     waypoints: List[int] = Body(..., min_length=1, description="IDs de atracciones a visitar"),
     end_attraction_id: Optional[int] = Query(None, description="ID destino final (opcional)"),
     optimization_mode: str = Query("balanced", pattern="^(distance|time|cost|balanced|score)$"),
-    attraction_scores: Optional[Dict[int, float]] = Body(None),
+    attraction_scores: Optional[Dict[Union[int, str], float]] = Body(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -142,7 +143,7 @@ def optimize_multi_stop_route(
 def compare_optimization_modes(
     start_attraction_id: int = Query(..., gt=0),
     end_attraction_id: int = Query(..., gt=0),
-    attraction_scores: Optional[Dict[int, float]] = Body(None),
+    attraction_scores: Optional[Dict[Union[int, str], float]] = Body(None),
     db: Session = Depends(get_db)
 ):
     """

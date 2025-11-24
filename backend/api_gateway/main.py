@@ -11,6 +11,7 @@ from services.connections import connection_router
 from services.user_profile import user_profile_router
 from services.search_service import search_router
 from services.route_optimizer import router_optimizer_router
+from services.rules_engine import rules_engine_router
 
 # Configuración
 settings = get_settings()
@@ -75,6 +76,12 @@ app.include_router(
     router_optimizer_router,
     prefix="/api",
     tags=["Route Optimization (A*)"]
+)
+
+app.include_router(
+    rules_engine_router,
+    prefix="/api",
+    tags=["Rules Engine (Forward Chaining)"]
 )
 
 @app.on_event("startup")
