@@ -12,6 +12,7 @@ from services.user_profile import user_profile_router
 from services.search_service import search_router
 from services.route_optimizer import router_optimizer_router
 from services.rules_engine import rules_engine_router
+from services.itinerary_generator import itinerary_router
 
 # Configuración
 settings = get_settings()
@@ -82,6 +83,12 @@ app.include_router(
     rules_engine_router,
     prefix="/api",
     tags=["Rules Engine (Forward Chaining)"]
+)
+
+app.include_router(
+    itinerary_router,
+    prefix="/api",
+    tags=["Itinerary Generator"]
 )
 
 @app.on_event("startup")
