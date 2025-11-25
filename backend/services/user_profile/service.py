@@ -7,14 +7,13 @@ from typing import List, Optional, Tuple, Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from fastapi import HTTPException, status
-from uuid import UUID
 
 from shared.database.models.attraction import Attraction
 from shared.database.models import UserProfile, AttractionRating, Itinerary
+from shared.database.models import User 
 from shared.schemas.user_profile import (
     UserProfileCreate,
     UserProfileUpdate,
-    UserProfileRead,
     PreferencesSchema
 )
 from shared.utils.logger import setup_logger
@@ -26,53 +25,69 @@ class UserProfileService:
     """Servicio para operaciones CRUD de perfiles de usuario"""
     
     @staticmethod
-    def create(db: Session, data: UserProfileCreate) -> UserProfile:
+    def create(db: Session, user_id: int, data: UserProfileCreate) -> UserProfile:
         """
-        Crear un nuevo perfil de usuario
+        Crear un nuevo perfil de usuario vinculado a un User ID
         
         Args:
             db: Sesión de base de datos
+            user_id: ID del usuario (tabla users)
             data: Datos del perfil a crear
             
         Returns:
             UserProfile: Perfil creado
         """
         try:
-            # Verificar si el email ya existe
+            # 1. Verificar que el usuario no tenga ya un perfil (Relación 1 a 1)
+            existing_profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+            if existing_profile:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"El usuario con ID {user_id} ya tiene un perfil creado."
+                )
+
+            # 2. Verificar si el email opcional ya existe en otro perfil
             if data.email:
-                existing = db.query(UserProfile).filter(
+                existing_email = db.query(UserProfile).filter(
                     UserProfile.email == data.email
                 ).first()
                 
-                if existing:
+                if existing_email:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
-                        detail=f"Ya existe un perfil con el email {data.email}"
+                        detail=f"Ya existe un perfil asociado al email {data.email}"
                     )
             
-            # Convertir preferences a dict
+            # Convertir preferences a dict si es un objeto Pydantic
             profile_data = data.model_dump()
             if isinstance(profile_data.get('preferences'), PreferencesSchema):
                 profile_data['preferences'] = profile_data['preferences'].model_dump()
             
-            # Crear el perfil
-            profile = UserProfile(**profile_data)
+            # 3. Crear el perfil inyectando el user_id
+            profile = UserProfile(user_id=user_id, **profile_data)
             
             db.add(profile)
             db.commit()
             db.refresh(profile)
             
-            logger.info(f"Perfil de usuario creado: {profile.name} (ID: {profile.id})")
+            logger.info(f"Perfil creado para User ID {user_id}: {profile.name} (ID: {profile.id})")
             return profile
             
         except HTTPException:
             raise
         except Exception as e:
             db.rollback()
+            # Capturar errores de integridad de FK (si el usuario no existe)
+            if "foreign key constraint" in str(e).lower():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"El usuario con ID {user_id} no existe."
+                )
+            
             logger.error(f"Error al crear perfil de usuario: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al crear perfil de usuario: {str(e)}"
+                detail=f"Error interno al crear perfil: {str(e)}"
             )
     
     @staticmethod
@@ -81,8 +96,8 @@ class UserProfileService:
         return db.query(UserProfile).filter(UserProfile.id == profile_id).first()
     
     @staticmethod
-    def get_by_user_id(db: Session, user_id: str) -> Optional[UserProfile]:
-        """Obtener un perfil por user_id (UUID)"""
+    def get_by_user_id(db: Session, user_id: int) -> Optional[UserProfile]:
+        """Obtener un perfil por user_id (Integer)"""
         return db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
     
     @staticmethod
@@ -110,26 +125,14 @@ class UserProfileService:
     ) -> Tuple[List[UserProfile], int]:
         """
         Obtener lista de perfiles con filtros y paginación
-        
-        Args:
-            db: Sesión de base de datos
-            skip: Registros a saltar
-            limit: Número máximo de registros
-            budget_range: Filtrar por rango de presupuesto
-            
-        Returns:
-            Tuple: (lista de perfiles, total)
         """
         query = db.query(UserProfile)
         
-        # Filtrar por budget_range
         if budget_range:
             query = query.filter(UserProfile.budget_range == budget_range.lower())
         
-        # Contar total
         total = query.count()
         
-        # Aplicar paginación
         profiles = query.order_by(
             UserProfile.created_at.desc()
         ).offset(skip).limit(limit).all()
@@ -144,21 +147,12 @@ class UserProfileService:
     ) -> UserProfile:
         """
         Actualizar un perfil existente
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            data: Datos a actualizar
-            
-        Returns:
-            UserProfile: Perfil actualizado
         """
         profile = UserProfileService.get_or_404(db, profile_id)
         
         try:
             update_data = data.model_dump(exclude_unset=True)
             
-            # Verificar email único si se está actualizando
             if 'email' in update_data and update_data['email']:
                 existing = db.query(UserProfile).filter(
                     UserProfile.email == update_data['email'],
@@ -194,13 +188,6 @@ class UserProfileService:
     def delete(db: Session, profile_id: int) -> dict:
         """
         Eliminar un perfil
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            
-        Returns:
-            dict: Mensaje de confirmación
         """
         profile = UserProfileService.get_or_404(db, profile_id)
         
@@ -224,17 +211,9 @@ class UserProfileService:
     def get_with_statistics(db: Session, profile_id: int) -> Dict:
         """
         Obtener perfil con estadísticas de actividad
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            
-        Returns:
-            Dict: Perfil con estadísticas
         """
         profile = UserProfileService.get_or_404(db, profile_id)
         
-        # Calcular estadísticas
         total_itineraries = db.query(Itinerary).filter(
             Itinerary.user_profile_id == profile_id
         ).count()
@@ -249,24 +228,13 @@ class UserProfileService:
             AttractionRating.user_profile_id == profile_id
         ).scalar()
         
-        # Itinerarios completados
         completed_itineraries = db.query(Itinerary).filter(
             Itinerary.user_profile_id == profile_id,
             Itinerary.status == 'completed'
         ).count()
         
-        # Categorías más visitadas (basado en ratings)
-        top_categories = db.query(
-            func.count(AttractionRating.id).label('count')
-        ).join(
-            AttractionRating.attraction
-        ).filter(
-            AttractionRating.user_profile_id == profile_id
-        ).group_by(
-            'category'
-        ).order_by(
-            func.count(AttractionRating.id).desc()
-        ).limit(5).all()
+        # Nota: Se eliminó el cálculo de top_categories por ahora para mantenerlo simple,
+        # ya que depende de joins complejos que podrían requerir más ajustes.
         
         return {
             **profile.__dict__,
@@ -274,43 +242,8 @@ class UserProfileService:
             "completed_itineraries": completed_itineraries,
             "total_ratings": total_ratings,
             "avg_rating_given": float(avg_rating_given) if avg_rating_given else None,
-            "_sa_instance_state": None  # Eliminar atributo interno
+            "_sa_instance_state": None
         }
-    
-    @staticmethod
-    def update_computed_profile(
-        db: Session,
-        profile_id: int,
-        computed_data: Dict
-    ) -> UserProfile:
-        """
-        Actualizar el perfil computado (usado por ML)
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            computed_data: Datos computados por algoritmos ML
-            
-        Returns:
-            UserProfile: Perfil actualizado
-        """
-        profile = UserProfileService.get_or_404(db, profile_id)
-        
-        try:
-            profile.computed_profile = computed_data
-            db.commit()
-            db.refresh(profile)
-            
-            logger.info(f"Perfil computado actualizado para usuario {profile_id}")
-            return profile
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error al actualizar perfil computado {profile_id}: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al actualizar perfil computado: {str(e)}"
-            )
     
     @staticmethod
     def get_recommendations(
@@ -321,26 +254,13 @@ class UserProfileService:
     ) -> List[Dict]:
         """
         Obtener recomendaciones personalizadas basadas en preferencias
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            destination_id: Filtrar por destino (opcional)
-            limit: Número máximo de recomendaciones
-            
-        Returns:
-            List[Dict]: Lista de atracciones recomendadas
         """
-        from shared.database.models import Attraction
-        
         profile = UserProfileService.get_or_404(db, profile_id)
-        
-        # Extraer intereses de las preferencias
         preferences = profile.preferences or {}
         interests = preferences.get('interests', [])
         
+        # Lógica de fallback si no hay intereses
         if not interests:
-            # Si no hay intereses, devolver las más populares
             query = db.query(Attraction)
             if destination_id:
                 query = query.filter(Attraction.destination_id == destination_id)
@@ -353,87 +273,70 @@ class UserProfileService:
                 {
                     **attr.__dict__,
                     'recommendation_score': float(attr.popularity_score) if attr.popularity_score else 0.0,
-                    'match_reason': 'popular'
+                    'match_reason': 'popular',
+                     '_sa_instance_state': None
                 }
                 for attr in attractions
             ]
         
-        # Buscar atracciones que coincidan con los intereses
         query = db.query(Attraction)
-        
         if destination_id:
             query = query.filter(Attraction.destination_id == destination_id)
         
-        # Filtrar por categorías de interés
+        # Mapeo simple de intereses
         interest_categories = []
         category_map = {
-            'historia': 'historico',
-            'arte': 'cultural',
-            'museos': 'cultural',
-            'gastronomia': 'gastronomia',
-            'comida': 'gastronomia',
-            'naturaleza': 'naturaleza',
-            'aventura': 'aventura',
-            'deportes': 'deportivo',
-            'compras': 'compras',
-            'entretenimiento': 'entretenimiento'
+            'historia': 'historico', 'arte': 'cultural', 'museos': 'cultural',
+            'gastronomia': 'gastronomia', 'comida': 'gastronomia',
+            'naturaleza': 'naturaleza', 'aventura': 'aventura',
+            'deportes': 'deportivo', 'compras': 'compras'
         }
         
         for interest in interests:
-            category = category_map.get(interest.lower())
-            if category and category not in interest_categories:
-                interest_categories.append(category)
+            cat = category_map.get(interest.lower())
+            if cat and cat not in interest_categories:
+                interest_categories.append(cat)
         
         if interest_categories:
             query = query.filter(Attraction.category.in_(interest_categories))
         
+        # Filtrar por presupuesto
         price_map = {
             'bajo': ['gratis', 'bajo'],
             'medio': ['gratis', 'bajo', 'medio'],
             'alto': ['gratis', 'bajo', 'medio', 'alto'],
-            'lujo': ['gratis', 'bajo', 'medio', 'alto']
+            'lujo': ['gratis', 'bajo', 'medio', 'alto', 'lujo']
         }
         
-        # Filtrar por budget si está disponible
         budget_range = profile.budget_range
-        if budget_range:
-            allowed_prices = price_map.get(budget_range.lower(), [])
-            if allowed_prices:
-                query = query.filter(Attraction.price_range.in_(allowed_prices))
-        
-        
-        # Ordenar por rating y popularidad
+        if budget_range and budget_range.lower() in price_map:
+             allowed = price_map[budget_range.lower()]
+             # Solo filtrar si tenemos datos de precio en las atracciones
+             # query = query.filter(Attraction.price_range.in_(allowed))
+             pass 
+
         attractions = query.order_by(
             Attraction.rating.desc(),
             Attraction.popularity_score.desc()
         ).limit(limit).all()
         
-        # Calcular score de recomendación
         recommendations = []
         for attr in attractions:
             score = 0.0
             reasons = []
             
-            # Score por categoría de interés
             if attr.category in interest_categories:
                 score += 50.0
-                reasons.append(f"coincide con interés: {attr.category}")
+                reasons.append(f"Interés: {attr.category}")
             
-            # Score por rating
             if attr.rating:
                 score += float(attr.rating) * 10
-                reasons.append(f"rating: {attr.rating}")
             
-            # Score por popularidad
-            if attr.popularity_score:
-                score += float(attr.popularity_score) * 0.3
-            
-            # Score por presupuesto
             if budget_range and attr.price_range:
-                if attr.price_range.lower() in price_map.get(budget_range.lower(), []):
-                    score += 10.0
-                    reasons.append("dentro de presupuesto")
-            
+                 if attr.price_range.lower() in price_map.get(budget_range.lower(), []):
+                     score += 10
+                     reasons.append("En presupuesto")
+
             recommendations.append({
                 **attr.__dict__,
                 'recommendation_score': round(score, 2),
@@ -441,12 +344,26 @@ class UserProfileService:
                 '_sa_instance_state': None
             })
         
-        # Ordenar por score
         recommendations.sort(key=lambda x: x['recommendation_score'], reverse=True)
-        
-        logger.info(f"Generadas {len(recommendations)} recomendaciones para perfil {profile_id}")
         return recommendations
-    
+
+    @staticmethod
+    def update_computed_profile(
+        db: Session,
+        profile_id: int,
+        computed_data: Dict
+    ) -> UserProfile:
+        """Actualizar el perfil computado (usado por ML)"""
+        profile = UserProfileService.get_or_404(db, profile_id)
+        try:
+            profile.computed_profile = computed_data
+            db.commit()
+            db.refresh(profile)
+            return profile
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
     @staticmethod
     def add_historical_rating(
         db: Session,
@@ -454,35 +371,20 @@ class UserProfileService:
         attraction_id: int,
         rating: int
     ) -> UserProfile:
-        """
-        Agregar rating histórico al perfil
-        
-        Args:
-            db: Sesión de base de datos
-            profile_id: ID del perfil
-            attraction_id: ID de la atracción
-            rating: Rating dado (1-5)
-            
-        Returns:
-            UserProfile: Perfil actualizado
-        """
+        """Agregar rating histórico al perfil"""
         profile = UserProfileService.get_or_404(db, profile_id)
-        
         try:
-            historical_ratings = profile.historical_ratings or {}
+            historical_ratings = dict(profile.historical_ratings or {})
             historical_ratings[str(attraction_id)] = rating
-            
             profile.historical_ratings = historical_ratings
+            
+            # flag modified para JSONB mutable si es necesario, aunque reasignar el dict suele funcionar
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(profile, "historical_ratings")
+            
             db.commit()
             db.refresh(profile)
-            
-            logger.info(f"Rating histórico agregado para perfil {profile_id}")
             return profile
-            
         except Exception as e:
             db.rollback()
-            logger.error(f"Error al agregar rating histórico: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error al agregar rating histórico: {str(e)}"
-            )
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

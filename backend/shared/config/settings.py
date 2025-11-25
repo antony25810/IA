@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://redis:6379/0"
     
     # Security - Se carga desde .env (requerido en runtime)
-    SECRET_KEY: str = ""
+    SECRET_KEY: str = "ContraseñaSuperSecretaPeroAsiBienSecreta"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     

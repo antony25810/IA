@@ -1,0 +1,191 @@
+ body {
+     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+     margin: 0;
+     padding: 0;
+     background-color: #f4f6f9;
+     color: #333;
+     display: flex;
+     flex-direction: column;
+     min-height: 100vh;
+ }
+
+ /* ====== HEADER ====== */
+ header {
+     background-color: #004a8f;
+     color: white;
+     padding: 12px 40px;
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+ }
+
+ header h1 {
+     font-size: 18px;
+     margin: 0;
+     font-weight: 600;
+ }
+
+ nav a {
+     color: white;
+     text-decoration: none;
+     margin: 0 14px;
+     font-weight: 500;
+     transition: opacity 0.3s;
+ }
+
+ nav a:hover {
+     opacity: 0.8;
+     text-decoration: underline;
+ }
+
+ /* ====== PERFIL HEADER ====== */
+ .profile-header {
+     background: linear-gradient(to right, #004a8f, #0073d1);
+     color: white;
+     text-align: center;
+     padding: 50px 20px 70px 20px;
+     position: relative;
+ }
+
+ .profile-header img {
+     width: 110px;
+     height: 110px;
+     border-radius: 50%;
+     border: 4px solid white;
+     position: absolute;
+     bottom: -55px;
+     left: 50%;
+     transform: translateX(-50%);
+     background-color: #fff;
+ }
+
+ .profile-header h2 {
+     margin: 0;
+     font-size: 26px;
+     font-weight: 600;
+ }
+
+ .profile-header p {
+     font-size: 15px;
+     opacity: 0.9;
+ }
+
+ /* ====== CONTENEDOR PRINCIPAL ====== */
+ .main-content {
+     padding: 90px 40px 40px 40px;
+     display: grid;
+     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+     gap: 30px;
+ }
+
+ .card {
+     background: white;
+     border-radius: 15px;
+     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+     padding: 25px;
+     transition: transform 0.3s;
+ }
+
+ .card:hover {
+     transform: translateY(-4px);
+ }
+
+ .card h3 {
+     color: #004a8f;
+     font-size: 18px;
+     margin-bottom: 15px;
+     border-bottom: 2px solid #f0f4f8;
+     padding-bottom: 6px;
+ }
+
+ .card ul {
+     list-style: none;
+     padding: 0;
+     margin: 0;
+ }
+
+ .card li {
+     font-size: 14px;
+     padding: 8px 0;
+     border-bottom: 1px solid #eee;
+ }
+
+ .stats {
+     display: flex;
+     justify-content: space-around;
+     flex-wrap: wrap;
+     margin-top: 10px;
+ }
+
+ .stat {
+     background-color: #f8f9fb;
+     border-radius: 10px;
+     padding: 15px 20px;
+     text-align: center;
+     flex: 1 1 120px;
+     margin: 10px;
+ }
+
+ .stat h4 {
+     color: #004a8f;
+     margin: 5px 0;
+     font-size: 18px;
+ }
+
+ .stat p {
+     font-size: 13px;
+     color: #555;
+ }
+
+ .preferences label {
+     display: block;
+     margin-bottom: 8px;
+     font-size: 14px;
+     color: #333;
+ }
+
+ .preferences select {
+     width: 100%;
+     padding: 10px;
+     border-radius: 8px;
+     border: 1px solid #ccc;
+     font-size: 14px;
+     margin-bottom: 15px;
+ }
+
+ .feedback textarea {
+     width: 100%;
+     min-height: 90px;
+     resize: none;
+     border: 1px solid #ccc;
+     border-radius: 8px;
+     padding: 10px;
+     font-family: inherit;
+     font-size: 14px;
+ }
+
+ .feedback button {
+     margin-top: 12px;
+     background-color: #004a8f;
+     color: white;
+     border: none;
+     border-radius: 8px;
+     padding: 10px 16px;
+     cursor: pointer;
+     font-size: 14px;
+     transition: background-color 0.3s;
+ }
+
+ .feedback button:hover {
+     background-color: #0060c4;
+ }
+
+ /* ====== FOOTER ====== */
+ footer {
+     background-color: #004a8f;
+     color: white;
+     text-align: center;
+     padding: 15px;
+     font-size: 14px;
+     margin-top: auto;
+ }

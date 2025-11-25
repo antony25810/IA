@@ -13,6 +13,14 @@ from services.search_service import search_router
 from services.route_optimizer import router_optimizer_router
 from services.rules_engine import rules_engine_router
 from services.itinerary_generator import itinerary_router
+from services.auth.router import  router as auth_router
+
+from shared.database.base import engine, Base
+from shared.database.models import User, UserProfile, Attraction, Itinerary, Destination, AttractionConnection, Review
+
+# 2. ESTA LÍNEA CREA LAS TABLAS SI NO EXISTEN
+# Se ejecuta cada vez que reinicias el backend. Si la tabla ya existe, no hace nada.
+Base.metadata.create_all(bind=engine)
 
 # Configuración
 settings = get_settings()
@@ -89,6 +97,12 @@ app.include_router(
     itinerary_router,
     prefix="/api",
     tags=["Itinerary Generator"]
+)
+
+app.include_router(
+    auth_router,
+    prefix="/api",
+    tags=["Authentication & Users"]
 )
 
 @app.on_event("startup")

@@ -3,8 +3,10 @@
 Endpoints REST para gestión de perfiles de usuario
 """
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, HTTPException, Query, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
 from sqlalchemy.orm import Session
+from services.auth.dependencies import get_current_user
+from shared.database.models import User
 
 from shared.database.base import get_db
 from shared.schemas.user_profile import (
@@ -27,45 +29,19 @@ router = APIRouter(
     response_model=UserProfileRead,
     status_code=status.HTTP_201_CREATED,
     summary="Crear un perfil de usuario",
-    description="Crea un nuevo perfil con preferencias personalizadas"
+    description="Crea un nuevo perfil vinculado a un usuario existente"
 )
 def create_user_profile(
     data: UserProfileCreate,
+    current_user: User = Depends(get_current_user), 
     db: Session = Depends(get_db)
 ):
     """
     Crear un nuevo perfil de usuario.
     
-    Campos requeridos:
-    - preferences: Objeto con preferencias del usuario
-      - interests: Lista de intereses (ej: ["cultural", "historia", "gastronomia"])
-      - tourism_type: Tipo de turismo (cultural, aventura, familiar, lujo, mochilero, negocios)
-      - pace: Ritmo de viaje (relaxed, moderate, intense)
-    
-    Ejemplo:
-    ```json
-    {
-        "name": "Juan Pérez",
-        "email": "juan@example.com",
-        "preferences": {
-            "interests": ["cultural", "historia", "gastronomia"],
-            "tourism_type": "cultural",
-            "pace": "moderate",
-            "accessibility_needs": [],
-            "dietary_restrictions": []
-        },
-        "budget_range": "medio",
-        "budget_min": 100,
-        "budget_max": 300,
-        "mobility_constraints": {
-            "max_walking_distance": 3000,
-            "preferred_transport": ["walking", "car"],
-            "avoid_transport": []
-        }
-    }
-    ```
+    Requiere el ID del usuario registrado (user_id).
     """
-    return UserProfileService.create(db, data)
+    return UserProfileService.create(db, current_user.user_id, data)
 
 
 @router.get(
@@ -115,6 +91,28 @@ def get_user_profile(
 
 
 @router.get(
+    "/user/{user_id}",
+    response_model=UserProfileRead,
+    summary="Obtener perfil por User ID",
+    description="Obtiene el perfil asociado a un ID de usuario de login"
+)
+def get_profile_by_user_id(
+    user_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtener el perfil vinculado a un usuario específico.
+    """
+    profile = UserProfileService.get_by_user_id(db, user_id)
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró perfil para el usuario {user_id}"
+        )
+    return profile
+
+
+@router.get(
     "/{profile_id}/stats",
     response_model=UserProfileWithStats,
     summary="Obtener perfil con estadísticas",
@@ -126,15 +124,11 @@ def get_user_profile_with_stats(
 ):
     """
     Obtener perfil con estadísticas completas.
-    
-    Incluye:
-    - Total de itinerarios creados
-    - Itinerarios completados
-    - Total de ratings dados
-    - Rating promedio dado
     """
     stats = UserProfileService.get_with_statistics(db, profile_id)
-    stats.pop('_sa_instance_state', None)
+    # Limpieza interna de SQLAlchemy si es necesario, aunque Pydantic suele manejarlo
+    if isinstance(stats, dict) and '_sa_instance_state' in stats:
+        stats.pop('_sa_instance_state', None)
     return stats
 
 
@@ -152,14 +146,6 @@ def get_recommendations(
 ):
     """
     Obtener recomendaciones personalizadas.
-    
-    El sistema analiza:
-    - Intereses del usuario
-    - Presupuesto disponible
-    - Restricciones de movilidad
-    - Ratings históricos
-    
-    Y devuelve atracciones con un **recommendation_score** y razones del match.
     """
     return UserProfileService.get_recommendations(
         db=db,
@@ -167,28 +153,6 @@ def get_recommendations(
         destination_id=destination_id,
         limit=limit
     )
-
-
-@router.get(
-    "/email/{email}",
-    response_model=UserProfileRead,
-    summary="Buscar perfil por email",
-    description="Busca un perfil por dirección de email"
-)
-def get_profile_by_email(
-    email: str = Path(...),
-    db: Session = Depends(get_db)
-):
-    """
-    Buscar perfil por email.
-    """
-    profile = UserProfileService.get_by_email(db, email)
-    if not profile:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Perfil con email {email} no encontrado"
-        )
-    return profile
 
 
 @router.put(
@@ -204,8 +168,6 @@ def update_user_profile(
 ):
     """
     Actualizar perfil de usuario.
-    
-    Solo se actualizarán los campos proporcionados.
     """
     return UserProfileService.update(db, profile_id, data)
 
@@ -222,6 +184,5 @@ def delete_user_profile(
 ):
     """
     Eliminar perfil de usuario.
-    
     """
     return UserProfileService.delete(db, profile_id)

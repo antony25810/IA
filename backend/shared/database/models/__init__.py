@@ -8,6 +8,7 @@ from .connection import AttractionConnection
 from .user_profile import UserProfile
 from .itinerary import Itinerary, ItineraryAttraction
 from .review import Review, AttractionRating
+from .user import User
 
 __all__ = [
     "Destination",
@@ -17,5 +18,6 @@ __all__ = [
     "Itinerary",
     "ItineraryAttraction",
     "Review",
-    "AttractionRating"
+    "AttractionRating", 
+    "User"
 ]

@@ -1,0 +1,258 @@
+ /* ====== ESTRUCTURA GENERAL ====== */
+ html,
+ body {
+     height: 100%;
+     display: flex;
+     flex-direction: column;
+ }
+
+ body {
+     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+     margin: 0;
+     padding: 0;
+     background-color: #fff;
+     color: #333;
+ }
+
+ /* ====== HEADER ====== */
+ header {
+     background-color: #004a8f;
+     color: white;
+     padding: 12px 40px;
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+ }
+
+ header h1 {
+     font-size: 18px;
+     margin: 0;
+     font-weight: 600;
+ }
+
+ nav a {
+     color: white;
+     text-decoration: none;
+     margin: 0 14px;
+     font-weight: 500;
+     transition: opacity 0.3s;
+ }
+
+ nav a:hover {
+     opacity: 0.8;
+     text-decoration: underline;
+ }
+
+ .user-icon {
+     width: 36px;
+     height: 36px;
+     border-radius: 50%;
+     background-color: white;
+ }
+
+ /* ====== CONTENIDO PRINCIPAL ====== */
+ .container {
+     display: flex;
+     justify-content: space-between;
+     align-items: flex-start;
+     /* Alinea ambas columnas al mismo nivel */
+     flex-wrap: wrap;
+     padding: 60px 40px 40px 40px;
+     gap: 40px;
+ }
+
+ /* Ajuste para el lado derecho (contenido) */
+ .contenido {
+     flex: 2;
+     min-width: 350px;
+     margin-top: 0;
+     /* Asegura que inicie al mismo nivel */
+     display: flex;
+     flex-direction: column;
+     justify-content: flex-start;
+ }
+
+
+ /* NUEVO: tarjetas verticales con imagen y texto */
+ .categorias {
+     flex: 1;
+     min-width: 250px;
+     display: grid;
+     grid-template-columns: repeat(2, 1fr);
+     /* 👈 dos tarjetas por fila */
+     gap: 20px;
+     justify-items: center;
+ }
+
+ .tarjeta {
+     background: white;
+     border-radius: 15px;
+     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+     overflow: hidden;
+     transition: transform 0.3s;
+     width: 200px;
+     /* 👈 tamaño compacto */
+ }
+
+ .tarjeta:hover {
+     transform: scale(1.03);
+ }
+
+ .tarjeta img {
+     width: 100%;
+     height: 90px;
+     object-fit: cover;
+ }
+
+ .tarjeta-content {
+     padding: 10px 15px 15px 15px;
+ }
+
+ .tarjeta-content h3 {
+     margin: 5px 0;
+     font-size: 16px;
+     color: #004a8f;
+ }
+
+ .tarjeta-content p {
+     margin: 0;
+     font-size: 13px;
+     color: #555;
+     line-height: 1.4;
+ }
+
+ /* Lado derecho (título y mapa) */
+ .contenido {
+     flex: 2;
+     min-width: 350px;
+ }
+
+ .contenido h1 {
+     font-size: 38px;
+     color: #222;
+     margin: 0 0 10px 0;
+     /* 👈 elimina el margen superior */
+ }
+
+ .contenido p {
+     color: #555;
+     font-size: 15px;
+     line-height: 1.6;
+     margin-bottom: 25px;
+ }
+
+ iframe {
+     width: 100%;
+     height: 400px;
+     border: none;
+     border-radius: 10px;
+     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+ }
+
+ /* ====== BLOQUE DE BENEFICIOS ====== */
+ .beneficios {
+     display: flex;
+     justify-content: center;
+     flex-wrap: wrap;
+     gap: 40px;
+     padding: 30px 20px 40px 20px;
+     /* 👈 menos espacio arriba */
+     margin-top: -20px;
+     /* 👈 corrige el salto extra visual */
+ }
+
+ .beneficio {
+     max-width: 280px;
+     text-align: center;
+ }
+
+ .beneficio h3 {
+     color: #004a8f;
+     margin-bottom: 10px;
+     font-size: 20px;
+ }
+
+ .beneficio p {
+     font-size: 14px;
+     color: #555;
+     line-height: 1.5;
+ }
+
+ /* ====== FRASE MOTIVACIONAL ====== */
+ .frase {
+     background: linear-gradient(to right, #004a8f, #0073d1);
+     color: white;
+     text-align: center;
+     font-size: 18px;
+     padding: 35px 10px;
+     font-style: italic;
+ }
+
+ /* ====== CATEGORÍAS EXTRA (con imágenes) ====== */
+ .categorias-extra {
+     text-align: center;
+     padding: 60px 20px;
+     background-color: #f8f9fb;
+ }
+
+ .categorias-extra h2 {
+     color: #004a8f;
+     margin-bottom: 30px;
+ }
+
+ .grid-categorias {
+     display: flex;
+     justify-content: center;
+     flex-wrap: wrap;
+     gap: 30px;
+ }
+
+ .grid-categorias .item {
+     width: 230px;
+     background: white;
+     border-radius: 15px;
+     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
+     overflow: hidden;
+     transition: transform 0.3s;
+ }
+
+ .grid-categorias .item:hover {
+     transform: scale(1.05);
+ }
+
+ .grid-categorias img {
+     width: 100%;
+     height: 150px;
+     object-fit: cover;
+ }
+
+ .grid-categorias h4 {
+     margin: 10px 0 15px 0;
+     color: #004a8f;
+ }
+
+ /* ====== FOOTER ====== */
+ footer {
+     background-color: #004a8f;
+     color: white;
+     text-align: center;
+     padding: 15px;
+     font-size: 14px;
+     margin-top: auto;
+ }
+
+ /* ====== RESPONSIVE ====== */
+ @media (max-width: 768px) {
+     .container {
+         flex-direction: column;
+         align-items: center;
+     }
+
+     .contenido h1 {
+         text-align: center;
+     }
+
+     .categorias {
+         width: 100%;
+     }
+ }

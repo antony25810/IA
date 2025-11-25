@@ -3,11 +3,11 @@
 Modelo para perfiles de usuario
 """
 from sqlalchemy import (
-    Column, Integer, String, DateTime, func, Index
+    Column, Integer, String, DateTime, func, Index, ForeignKey
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 from shared.database.base import Base
-import uuid
 
 
 class UserProfile(Base):
@@ -18,22 +18,21 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(UUID(as_uuid=True), unique=True, default=uuid.uuid4, index=True)
+    
+    user_id = Column(
+        Integer, 
+        ForeignKey("users.id", ondelete="CASCADE"), 
+        unique=True, 
+        nullable=False, 
+        index=True
+    )
     
     # Información básica (opcional)
     name = Column(String(255))
-    email = Column(String(255), unique=True, index=True)
+    email = Column(String(255)) # Ya no es unique aquí estricto, depende del User, pero sirve de contacto
     
     # Preferencias de turismo
-    preferences = Column(JSONB, nullable=False)
-    # Ejemplo:
-    # {
-    #   "interests": ["cultural", "gastronomia", "historia"],
-    #   "tourism_type": "cultural",  # 'aventura', 'familiar', 'lujo', etc.
-    #   "pace": "relaxed",  # 'relaxed', 'moderate', 'intense'
-    #   "accessibility_needs": ["wheelchair"],
-    #   "dietary_restrictions": ["vegetarian"]
-    # }
+    preferences = Column(JSONB, nullable=False, default={})
     
     # Restricciones presupuestarias
     budget_range = Column(String(20))  # 'bajo', 'medio', 'alto', 'lujo'
@@ -41,29 +40,19 @@ class UserProfile(Base):
     budget_max = Column(Integer)  # Presupuesto máximo por día
     
     # Restricciones de movilidad
-    mobility_constraints = Column(JSONB)
-    # Ejemplo:
-    # {
-    #   "max_walking_distance": 2000,  # metros
-    #   "preferred_transport": ["public_transport", "walking"],
-    #   "avoid_transport": ["bicycle"]
-    # }
+    mobility_constraints = Column(JSONB, default={})
     
     # Historial de ratings (para el modelo ML)
-    historical_ratings = Column(JSONB)
-    # Ejemplo:
-    # [
-    #   {"attraction_id": 1, "rating": 5, "date": "2025-01-15"},
-    #   {"attraction_id": 2, "rating": 4, "date": "2025-01-15"}
-    # ]
+    historical_ratings = Column(JSONB, default=[])
     
     # Perfil calculado por el sistema de reglas
-    computed_profile = Column(JSONB)
-    # Resultado del motor de inferencia (forward chaining)
+    computed_profile = Column(JSONB, default={})
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="profile")
 
     # Índices
     __table_args__ = (
@@ -71,13 +60,13 @@ class UserProfile(Base):
     )
 
     def __repr__(self):
-        return f"<UserProfile(id={self.id}, user_id='{self.user_id}')>"
+        return f"<UserProfile(id={self.id}, user_id={self.user_id})>"
 
     def to_dict(self):
         """Convierte el modelo a diccionario"""
         return {
             "id": self.id,
-            "user_id": str(self.user_id),
+            "user_id": self.user_id,
             "name": self.name,
             "email": self.email,
             "preferences": self.preferences,

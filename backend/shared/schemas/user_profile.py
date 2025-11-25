@@ -5,7 +5,6 @@ Schemas para perfiles de usuario
 from pydantic import BaseModel, Field, EmailStr, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from uuid import UUID
 from .base import ResponseBase, TimestampMixin
 
 
@@ -96,7 +95,7 @@ class UserProfileUpdate(BaseModel):
 class UserProfileRead(UserProfileBase, ResponseBase, TimestampMixin):
     """Schema para leer un perfil de usuario"""
     id: int
-    user_id: UUID  # UUID como string
+    user_id: int  # <-- CAMBIO: UUID a int
     preferences: Dict[str, Any]
     budget_range: Optional[str] = None
     budget_min: Optional[int] = None

@@ -68,6 +68,22 @@ services:
       - turismo_network
     command: uvicorn api_gateway.main:app --host 0.0.0.0 --port 8000 --reload
 
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    container_name: turismo_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - API_INTERNAL_URL=http://backend:8000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
   # PgAdmin (opcional, para administrar la BD)
   pgadmin:
     image: dpage/pgadmin4:latest
