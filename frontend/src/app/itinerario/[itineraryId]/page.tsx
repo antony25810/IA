@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '../../context/AuthContext';
-import { getItineraryById, updateItineraryStatus, Itinerary } from '../../services/itinerary';
-import { getDestinationById } from '../../services/destinationService';
-import DayTab from '../../components/DayTab';
-import DayContent from '../../components/DayContent';
+import { useAuth } from '../../../context/AuthContext';
+import { getItineraryById, updateItineraryStatus, Itinerary } from '../../../services/itinerary';
+import { getDestinationById } from '../../../services/destinationService';
+import DayTab from '../../../components/DayTab';
+import DayContent from '../../../components/DayContent';
 import '../../styles/itinerario.css';
 
 const ItinerarioPage: React.FC = () => {

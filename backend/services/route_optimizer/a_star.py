@@ -7,8 +7,9 @@ from dataclasses import dataclass, field
 from heapq import heappush, heappop
 from sqlalchemy.orm import Session
 
-from shared.database.models import Attraction, AttractionConnection
+from shared.database.models import Attraction
 from shared.utils.logger import setup_logger
+from shared.graph_loader import GraphDataManager # <--- IMPORTANTE
 from .heuristics import Heuristics, CostCalculator, get_optimization_weights
 from .path_generator import PathGenerator, OptimizedRoute
 
@@ -44,14 +45,6 @@ class AStar:
         optimization_mode: str = "balanced",
         heuristic_type: str = "euclidean"
     ):
-        """
-        Inicializar A*
-        
-        Args:
-            db: Sesión de base de datos
-            optimization_mode: Modo de optimización (distance, time, cost, balanced, score)
-            heuristic_type: Tipo de heurística (euclidean, manhattan, zero)
-        """
         self.db = db
         self.optimization_mode = optimization_mode
         self.heuristic_type = heuristic_type
@@ -64,26 +57,7 @@ class AStar:
         self.cost_calculator = CostCalculator(self.weights)
         self.path_generator = PathGenerator(db)
         
-        # Seleccionar función heurística
-        self.heuristic_func = self._get_heuristic_function()
-        
-        logger.info(
-            f"A* inicializado: modo={optimization_mode}, "
-            f"heurística={heuristic_type}"
-        )
-    
-    def _get_heuristic_function(self):
-        """Obtener función heurística según el tipo"""
-        heuristic_map = {
-            'euclidean': Heuristics.euclidean_distance,
-            'manhattan': Heuristics.manhattan_distance,
-            'zero': Heuristics.zero_heuristic
-        }
-        
-        return heuristic_map.get(
-            self.heuristic_type,
-            Heuristics.euclidean_distance
-        )
+        logger.info(f"A* inicializado: modo={optimization_mode}, heurística={heuristic_type}")
     
     def find_path(
         self,
@@ -93,35 +67,28 @@ class AStar:
         max_iterations: int = 10000
     ) -> OptimizedRoute:
         """
-        Encontrar ruta óptima usando A*
-        
-        Args:
-            start_attraction_id: ID de atracción de inicio
-            end_attraction_id: ID de atracción destino
-            attraction_scores: Scores de idoneidad (opcional)
-            max_iterations: Máximo de iteraciones
-            
-        Returns:
-            OptimizedRoute: Ruta optimizada o ruta vacía si no se encuentra
+        Encontrar ruta óptima usando A* con carga en memoria (GraphLoader)
         """
-        logger.info(
-            f"Buscando ruta A*: {start_attraction_id} → {end_attraction_id}"
-        )
+        logger.info(f"Buscando ruta A*: {start_attraction_id} → {end_attraction_id}")
         
-        # Verificar que las atracciones existen
-        start_attr = self.db.query(Attraction).filter(
-            Attraction.id == start_attraction_id
-        ).first()
-        
-        end_attr = self.db.query(Attraction).filter(
-            Attraction.id == end_attraction_id
-        ).first()
-        
-        if not start_attr:
+        # 1. Obtener la atracción de inicio de la DB SOLO para saber el destination_id
+        # y cargar el grafo correcto.
+        start_attr_db = self.db.query(Attraction).filter(Attraction.id == start_attraction_id).first()
+        if not start_attr_db:
             raise ValueError(f"Atracción de inicio {start_attraction_id} no encontrada")
+            
+        # 2. CARGAR EL GRAFO EN MEMORIA (Optimización N+1)
+        graph = GraphDataManager(self.db, start_attr_db.destination_id)
+
+        # Obtener nodos de inicio y fin desde la memoria RAM
+        start_node_data = graph.get_node(start_attraction_id)
+        end_node_data = graph.get_node(end_attraction_id)
         
-        if not end_attr:
-            raise ValueError(f"Atracción destino {end_attraction_id} no encontrada")
+        if not start_node_data:
+            raise ValueError(f"Atracción de inicio {start_attraction_id} no encontrada en el grafo")
+        
+        if not end_node_data:
+            raise ValueError(f"Atracción destino {end_attraction_id} no encontrada en el grafo")
         
         # Inicializar estructuras de datos
         self.nodes_explored = 0
@@ -130,8 +97,14 @@ class AStar:
         came_from: Dict[int, int] = {}
         g_scores: Dict[int, float] = {start_attraction_id: 0.0}
         
-        # Nodo inicial
-        h_initial = self.heuristic_func(self.db, start_attr, end_attr)
+        # Calcular heurística inicial (usando coordenadas del diccionario)
+        h_initial = 0.0
+        if self.heuristic_type == 'euclidean':
+            h_initial = Heuristics.haversine_distance(
+                start_node_data['lat'], start_node_data['lon'],
+                end_node_data['lat'], end_node_data['lon']
+            )
+
         initial_node = AStarNode(
             attraction_id=start_attraction_id,
             g_cost=0.0,
@@ -152,14 +125,12 @@ class AStar:
             if current_id == end_attraction_id:
                 logger.info(f"✅ Ruta encontrada ({self.nodes_explored} nodos)")
                 
-                # Reconstruir camino
                 path = self.path_generator.reconstruct_path(
                     came_from,
                     start_attraction_id,
                     end_attraction_id
                 )
                 
-                # Construir ruta completa
                 return self.path_generator.build_route(
                     path,
                     g_scores,
@@ -174,8 +145,8 @@ class AStar:
             
             closed_set.add(current_id)
             
-            # Explorar vecinos
-            neighbors = self._get_neighbors(current_id)
+            # 3. OBTENER VECINOS DE MEMORIA (No SQL)
+            neighbors = graph.get_neighbors(current_id)
             
             for neighbor in neighbors:
                 neighbor_id = neighbor['to_attraction_id']
@@ -190,26 +161,28 @@ class AStar:
                 
                 # Si encontramos un mejor camino
                 if neighbor_id not in g_scores or tentative_g < g_scores[neighbor_id]:
-                    # Actualizar
                     g_scores[neighbor_id] = tentative_g
                     came_from[neighbor_id] = current_id
                     
-                    # Obtener atracción vecina para heurística
-                    neighbor_attr = self.db.query(Attraction).filter(
-                        Attraction.id == neighbor_id
-                    ).first()
+                    # 4. CALCULAR HEURÍSTICA (Usando datos en memoria)
+                    h_cost = 0.0
+                    neighbor_data = graph.get_node(neighbor_id)
                     
-                    if neighbor_attr:
-                        h_cost = self.heuristic_func(self.db, neighbor_attr, end_attr)
-                        
-                        neighbor_node = AStarNode(
-                            attraction_id=neighbor_id,
-                            g_cost=tentative_g,
-                            h_cost=h_cost,
-                            parent_id=current_id
+                    if neighbor_data and self.heuristic_type == 'euclidean':
+                        # Llamada correcta a la estática con 4 argumentos
+                        h_cost = Heuristics.haversine_distance(
+                            neighbor_data['lat'], neighbor_data['lon'],
+                            end_node_data['lat'], end_node_data['lon']
                         )
                         
-                        heappush(open_set, neighbor_node)
+                    neighbor_node = AStarNode(
+                        attraction_id=neighbor_id,
+                        g_cost=tentative_g,
+                        h_cost=h_cost,
+                        parent_id=current_id
+                    )
+                        
+                    heappush(open_set, neighbor_node)
         
         # No se encontró ruta
         logger.warning(f"❌ No se encontró ruta ({self.nodes_explored} nodos explorados)")
@@ -218,24 +191,6 @@ class AStar:
             self.nodes_explored,
             self.optimization_mode
         )
-    
-    def _get_neighbors(self, attraction_id: int) -> List[Dict]:
-        """Obtener vecinos (conexiones salientes)"""
-        connections = self.db.query(AttractionConnection).filter(
-            AttractionConnection.from_attraction_id == attraction_id
-        ).all()
-        
-        neighbors = []
-        for conn in connections:
-            neighbors.append({
-                'to_attraction_id': conn.to_attraction_id,
-                'distance_meters': float(conn.distance_meters),
-                'travel_time_minutes': conn.travel_time_minutes,
-                'transport_mode': conn.transport_mode,
-                'cost': float(conn.cost) if conn.cost else 0.0
-            })
-        
-        return neighbors
     
     def _calculate_edge_cost(
         self,

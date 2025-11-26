@@ -1,379 +1,264 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useRouter, useParams } from 'next/navigation'; // Usamos useParams para mayor seguridad
 import { useAuth } from '../../../context/AuthContext';
-import { getDestinationById, getAttractionsByDestination, searchAttractions } from '../../../services/destinationService';
+import { getDestinationById, searchAttractions } from '../../../services/destinationService';
+import { generateItinerary } from '../../../services/itinerary';
 import { getUserProfileByUserId } from '../../../services/profileService';
-import { Destination, Attraction, UserProfile, TripConfiguration } from '../../../types';
-import '../../styles/planear. css';
+import { Destination } from '../../../types';
+import '../../styles/planear.css';
 
-const PlanearViaje: React.FC = () => {
-    const params = useParams();
-    const router = useRouter();
+export default function PlanearPage() {
     const { user } = useAuth();
+    const router = useRouter();
+    const params = useParams();
     
-    const destinationId = parseInt(params.destinationId as string);
-    
-    // Estado
+    // Aseguramos que destinationId sea un número
+    const destId = Number(params.destinationId);
+
     const [destination, setDestination] = useState<Destination | null>(null);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
-    
-    // Configuración del viaje
+    const [generating, setGenerating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Formulario
     const [startDate, setStartDate] = useState('');
     const [numDays, setNumDays] = useState(3);
-    const [hotelSearch, setHotelSearch] = useState('');
-    const [hotelSuggestions, setHotelSuggestions] = useState<Attraction[]>([]);
-    const [selectedHotel, setSelectedHotel] = useState<Attraction | null>(null);
-    const [cityCenter, setCityCenter] = useState<Attraction | null>(null);
+    const [hotelQuery, setHotelQuery] = useState('');
+    const [hotelResults, setHotelResults] = useState<any[]>([]);
+    const [selectedHotel, setSelectedHotel] = useState<any | null>(null);
     
-    // Parámetros avanzados
+    // Configuración avanzada
+    const [optimizationMode, setOptimizationMode] = useState('balanced');
     const [showAdvanced, setShowAdvanced] = useState(false);
-    const [maxRadiusKm, setMaxRadiusKm] = useState(10);
-    const [maxCandidates, setMaxCandidates] = useState(50);
 
     // Cargar datos iniciales
     useEffect(() => {
+        if (!destId) return;
+        
         const loadData = async () => {
-            if (! user?. id) {
-                router.push('/Sesion');
-                return;
-            }
-
             try {
-                setLoading(true);
-                
-                // 1. Cargar destino
-                const destData = await getDestinationById(destinationId);
-                setDestination(destData);
-                
-                // 2.  Cargar perfil del usuario
-                const profileData = await getUserProfileByUserId(user.id);
-                setUserProfile(profileData);
-                
-                // 3.  Obtener atracción céntrica (ej: plaza principal)
-                const attractions = await getAttractionsByDestination(destinationId, {
-                    category: 'historico',
-                    limit: 1
-                });
-                
-                if (attractions.items && attractions.items.length > 0) {
-                    setCityCenter(attractions.items[0]);
-                }
-                
-                // 4. Fecha por defecto: mañana
-                const tomorrow = new Date();
-                tomorrow. setDate(tomorrow.getDate() + 1);
-                setStartDate(tomorrow.toISOString().split('T')[0]);
-                
-            } catch (err: any) {
-                console.error('Error cargando datos:', err);
-                setError(err.message || 'Error cargando información');
+                const dest = await getDestinationById(destId);
+                setDestination(dest);
+            } catch (err) {
+                setError("No se pudo cargar el destino.");
             } finally {
                 setLoading(false);
             }
         };
-
         loadData();
-    }, [destinationId, user, router]);
+    }, [destId]);
 
-    // Buscar hoteles (autocomplete)
+    // Búsqueda de hoteles (Autocomplete)
     useEffect(() => {
-        const search = async () => {
-            if (hotelSearch.length < 3) {
-                setHotelSuggestions([]);
-                return;
+        const delayDebounceFn = setTimeout(async () => {
+            if (hotelQuery.length > 2 && !selectedHotel) {
+                try {
+                    const results = await searchAttractions(destId, hotelQuery, { limit: 5 });
+                    setHotelResults(results);
+                } catch (e) {
+                    console.error(e);
+                }
+            } else {
+                setHotelResults([]);
             }
+        }, 500);
 
-            try {
-                const results = await searchAttractions(destinationId, hotelSearch);
-                setHotelSuggestions(results);
-            } catch (err) {
-                console. error('Error buscando hoteles:', err);
-            }
-        };
+        return () => clearTimeout(delayDebounceFn);
+    }, [hotelQuery, destId, selectedHotel]);
 
-        const debounce = setTimeout(search, 300);
-        return () => clearTimeout(debounce);
-    }, [hotelSearch, destinationId]);
-
-    // Manejar inicio de planificación
-    const handleStartPlanning = async () => {
-        if (!userProfile || !cityCenter) {
-            setError('Faltan datos necesarios para continuar');
-            return;
-        }
-
-        if (!startDate || numDays < 1 || numDays > 14) {
-            setError('Fecha o número de días inválido');
-            return;
-        }
-
-        // Preparar configuración
-        const config: TripConfiguration = {
-            destination_id: destinationId,
-            city_center_id: cityCenter.id,
-            hotel_id: selectedHotel?.id,
-            num_days: numDays,
-            start_date: new Date(startDate).toISOString(),
-            optimization_mode: 'balanced',
-            max_radius_km: maxRadiusKm,
-            max_candidates: maxCandidates
-        };
-
-        // Guardar en sessionStorage para siguiente paso
-        sessionStorage.setItem('tripConfig', JSON.stringify(config));
-
-        // Navegar a vista de candidatos
-        router.push(`/planear/${destinationId}/candidatos`);
+    const handleSelectHotel = (hotel: any) => {
+        setSelectedHotel(hotel);
+        setHotelQuery(hotel.name);
+        setHotelResults([]);
     };
 
-    if (loading) {
-        return (
-            <div className="container">
-                <p>Cargando información...</p>
-            </div>
-        );
-    }
+    const handleGenerate = async () => {
+        if (!user || !startDate) {
+            setError("Por favor completa los campos requeridos.");
+            return;
+        }
 
-    if (error) {
-        return (
-            <div className="container">
-                <div className="error-box">
-                    <h3>❌ Error</h3>
-                    <p>{error}</p>
-                    <Link href="/Destino">Volver a Destinos</Link>
-                </div>
-            </div>
-        );
-    }
+        setGenerating(true);
+        setError(null);
+
+        try {
+            // 1. Obtener ID de perfil
+            const profile = await getUserProfileByUserId(user.id);
+            if (!profile) throw new Error("No tienes un perfil creado.");
+
+            // 2. Definir punto de partida
+            // Si no hay hotel, usamos el mismo ID del destino como fallback (o una atracción default)
+            // Nota: El backend espera un ID de atracción válido. Si falla, asegúrate que 'destId' sea válido.
+            const startPointId = selectedHotel ? selectedHotel.id : (await getDestinationById(destId)).id;
+
+            // 3. Llamar al generador IA
+            const response = await generateItinerary({
+                user_profile_id: profile.id!,
+                city_center_id: startPointId, 
+                hotel_id: selectedHotel?.id,
+                num_days: numDays,
+                start_date: new Date(startDate).toISOString(),
+                optimization_mode: optimizationMode,
+                max_radius_km: 10,
+                max_candidates: 50
+            });
+
+            // 4. Redirigir al resultado
+            router.push(`/itinerario/${response.itinerary_id}`);
+
+        } catch (err: any) {
+            console.error(err);
+            setError(err.message || "Error generando el itinerario. Intenta de nuevo.");
+            setGenerating(false);
+        }
+    };
+
+    if (loading) return <div className="loading-spinner"><div className="spinner"></div></div>;
+    if (!destination) return <div className="error-box">Destino no encontrado</div>;
 
     return (
-        <div>
-            {/* HEADER */}
-            <header>
-                <h1>RUTAS INTELIGENCIA ARTIFICIAL</h1>
-                <nav>
-                    <Link href="/">Inicio</Link>
-                    <Link href="/Destino">Destinos</Link>
-                    <Link href="/profile">Perfil</Link>
-                </nav>
-                <div className="user-icon"></div>
+        <div className="planear-container">
+            <header className="planear-header">
+                <h1>Planifica tu viaje a {destination.name}</h1>
+                <p>Configura los detalles y nuestra IA diseñará tu ruta perfecta.</p>
             </header>
 
-            {/* CONTENIDO PRINCIPAL */}
-            <main className="planear-container">
-                <div className="planear-header">
-                    <h1>Planifica tu viaje a {destination?.name}</h1>
-                    <p>{destination?.state}, {destination?.country}</p>
-                </div>
+            <div className="planear-grid">
+                {/* COLUMNA IZQUIERDA: Formulario */}
+                <div className="planear-form-card">
+                    <h2>Configuración del Viaje</h2>
+                    
+                    {error && <div className="error-box" style={{marginBottom: 20}}>{error}</div>}
 
-                <div className="planear-grid">
-                    {/* COLUMNA IZQUIERDA: Formulario */}
-                    <div className="planear-form-card">
-                        <h2>📅 Configuración del Viaje</h2>
+                    <div className="form-group">
+                        <label>📅 Fecha de Inicio</label>
+                        <input 
+                            type="date" 
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            min={new Date().toISOString().split('T')[0]}
+                        />
+                    </div>
 
-                        {/* Fecha de inicio */}
-                        <div className="form-group">
-                            <label>Fecha de Inicio</label>
-                            <input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                min={new Date().toISOString().split('T')[0]}
+                    <div className="form-group">
+                        <label>🗓️ Duración (Días)</label>
+                        <input 
+                            type="number" 
+                            min="1" max="7"
+                            value={numDays || ''}
+                            onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setNumDays(isNaN(val) ? 0 : val);
+                            }}
+                        />
+                        <small>Recomendamos entre 1 y 5 días.</small>
+                    </div>
+
+                    <div className="form-group" style={{position: 'relative'}}>
+                        <label>🏨 Punto de Partida (Hotel o Lugar)</label>
+                        {!selectedHotel ? (
+                            <input 
+                                type="text" 
+                                placeholder="Buscar hotel o punto de referencia..."
+                                value={hotelQuery}
+                                onChange={(e) => setHotelQuery(e.target.value)}
                             />
-                        </div>
-
-                        {/* Número de días */}
-                        <div className="form-group">
-                            <label>Número de Días</label>
-                            <input
-                                type="number"
-                                value={numDays}
-                                onChange={(e) => setNumDays(parseInt(e.target.value))}
-                                min={1}
-                                max={14}
-                            />
-                            <small>Entre 1 y 14 días</small>
-                        </div>
-
-                        {/* Hotel (opcional) */}
-                        <div className="form-group">
-                            <label>Hotel o Alojamiento (Opcional)</label>
-                            <input
-                                type="text"
-                                placeholder="Buscar hotel..."
-                                value={hotelSearch}
-                                onChange={(e) => setHotelSearch(e.target.value)}
-                            />
-                            
-                            {hotelSuggestions.length > 0 && (
-                                <div className="autocomplete-results">
-                                    {hotelSuggestions. map(hotel => (
-                                        <div
-                                            key={hotel.id}
-                                            className="autocomplete-item"
-                                            onClick={() => {
-                                                setSelectedHotel(hotel);
-                                                setHotelSearch(hotel. name);
-                                                setHotelSuggestions([]);
-                                            }}
-                                        >
-                                            <strong>{hotel.name}</strong>
-                                            <small>{hotel.address || hotel.category}</small>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {selectedHotel && (
-                                <div className="selected-hotel">
-                                    ✅ {selectedHotel.name}
-                                    <button onClick={() => {
-                                        setSelectedHotel(null);
-                                        setHotelSearch('');
-                                    }}>✕</button>
-                                </div>
-                            )}
-
-                            <small>Punto de inicio/retorno.  Si no eliges, usaremos el centro de la ciudad.</small>
-                        </div>
-
-                        {/* Configuración avanzada */}
-                        <div className="advanced-section">
-                            <button
-                                className="toggle-advanced"
-                                onClick={() => setShowAdvanced(!showAdvanced)}
-                            >
-                                {showAdvanced ? '▼' : '▶'} Configuración Avanzada
-                            </button>
-
-                            {showAdvanced && (
-                                <div className="advanced-options">
-                                    <div className="form-group">
-                                        <label>Radio de Búsqueda (km)</label>
-                                        <input
-                                            type="range"
-                                            min="5"
-                                            max="50"
-                                            value={maxRadiusKm}
-                                            onChange={(e) => setMaxRadiusKm(parseInt(e.target.value))}
-                                        />
-                                        <span>{maxRadiusKm} km</span>
+                        ) : (
+                            <div className="selected-hotel">
+                                <span>📍 {selectedHotel.name}</span>
+                                <button onClick={() => { setSelectedHotel(null); setHotelQuery(''); }}>✕</button>
+                            </div>
+                        )}
+                        
+                        {/* Resultados de Autocomplete */}
+                        {hotelResults.length > 0 && (
+                            <div className="autocomplete-results">
+                                {hotelResults.map(hotel => (
+                                    <div 
+                                        key={hotel.id} 
+                                        className="autocomplete-item"
+                                        onClick={() => handleSelectHotel(hotel)}
+                                    >
+                                        <strong>{hotel.name}</strong>
+                                        <small>{hotel.category}</small>
                                     </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
-                                    <div className="form-group">
-                                        <label>Número de Candidatos</label>
-                                        <input
-                                            type="range"
-                                            min="20"
-                                            max="100"
-                                            value={maxCandidates}
-                                            onChange={(e) => setMaxCandidates(parseInt(e.target.value))}
-                                        />
-                                        <span>{maxCandidates} atracciones</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Botón principal */}
-                        <button
-                            className="btn-primary"
-                            onClick={handleStartPlanning}
-                            disabled={!startDate || ! cityCenter}
+                    <div className="advanced-section">
+                        <button 
+                            className="toggle-advanced"
+                            onClick={() => setShowAdvanced(!showAdvanced)}
                         >
-                            🚀 Buscar Candidatos con IA
+                            {showAdvanced ? '▼' : '▶'} Opciones Avanzadas de IA
+                        </button>
+                        
+                        {showAdvanced && (
+                            <div className="advanced-options">
+                                <div className="form-group">
+                                    <label>Modo de Optimización</label>
+                                    <select 
+                                        value={optimizationMode}
+                                        onChange={(e) => setOptimizationMode(e.target.value)}
+                                        style={{width: '100%', padding: 10, borderRadius: 8}}
+                                    >
+                                        <option value="balanced">⚖️ Equilibrado</option>
+                                        <option value="score">⭐ Maximizar Calidad</option>
+                                        <option value="distance">🚶 Minimizar Distancia</option>
+                                        <option value="cost">💰 Minimizar Costo</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{marginTop: 30}}>
+                        <button 
+                            className="btn-primary"
+                            onClick={handleGenerate}
+                            disabled={generating}
+                        >
+                            {generating ? (
+                                <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10}}>
+                                    <div className="btn-spinner"></div> Generando...
+                                </span>
+                            ) : (
+                                "✨ Generar Itinerario con IA"
+                            )}
                         </button>
                     </div>
+                </div>
 
-                    {/* COLUMNA DERECHA: Resumen */}
-                    <div className="planear-summary-card">
-                        <h2>📊 Resumen</h2>
+                {/* COLUMNA DERECHA: Resumen */}
+                <div className="planear-summary-card">
+                    <h2>Resumen</h2>
+                    <div className="summary-item">
+                        <span className="summary-label">Destino</span>
+                        <span className="summary-value">{destination.name}, {destination.country}</span>
+                    </div>
+                    
+                    <div className="info-box">
+                        <h4>🤖 ¿Cómo funciona?</h4>
+                        <ol>
+                            <li>Analizamos tu <strong>Perfil</strong>.</li>
+                            <li>Buscamos atracciones cerca del <strong>Hotel</strong>.</li>
+                            <li>Aplicamos reglas de <strong>Clima</strong>.</li>
+                            <li>Optimizamos la ruta (A*).</li>
+                        </ol>
+                    </div>
 
-                        <div className="summary-item">
-                            <span className="summary-label">Destino:</span>
-                            <span className="summary-value">{destination?.name}</span>
-                        </div>
-
-                        <div className="summary-item">
-                            <span className="summary-label">Fechas:</span>
-                            <span className="summary-value">
-                                {startDate ?  new Date(startDate).toLocaleDateString('es-ES', {
-                                    weekday: 'long',
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                }) : 'No seleccionada'}
-                            </span>
-                        </div>
-
-                        <div className="summary-item">
-                            <span className="summary-label">Duración:</span>
-                            <span className="summary-value">{numDays} día{numDays > 1 ?  's' : ''}</span>
-                        </div>
-
-                        <div className="summary-item">
-                            <span className="summary-label">Punto de inicio:</span>
-                            <span className="summary-value">
-                                {selectedHotel ? selectedHotel.name : cityCenter?.name || 'Centro de la ciudad'}
-                            </span>
-                        </div>
-
-                        <hr />
-
-                        <h3>🤖 Tu Perfil de IA</h3>
-                        {userProfile ?  (
-                            <>
-                                <div className="summary-item">
-                                    <span className="summary-label">Presupuesto:</span>
-                                    <span className="summary-value">{userProfile.budget_range || 'No definido'}</span>
-                                </div>
-                                <div className="summary-item">
-                                    <span className="summary-label">Movilidad:</span>
-                                    <span className="summary-value">{userProfile.mobility_level || 'Media'}</span>
-                                </div>
-                                {userProfile.preferences?. interests && (
-                                    <div className="summary-item">
-                                        <span className="summary-label">Intereses:</span>
-                                        <div className="interests-tags">
-                                            {userProfile.preferences.interests.map((interest, idx) => (
-                                                <span key={idx} className="interest-tag">{interest}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <p>
-                                <Link href="/profile">⚠️ Configura tu perfil</Link> para recomendaciones personalizadas
-                            </p>
-                        )}
-
-                        <hr />
-
-                        <div className="info-box">
-                            <h4>ℹ️ ¿Cómo funciona? </h4>
-                            <ol>
-                                <li>La IA analiza tu perfil y preferencias</li>
-                                <li>Explora atracciones cercanas (BFS)</li>
-                                <li>Asigna puntuaciones de compatibilidad</li>
-                                <li>Optimiza la ruta con A*</li>
-                                <li>Genera tu itinerario personalizado</li>
-                            </ol>
-                        </div>
+                    <div style={{marginTop: 20, textAlign: 'center'}}>
+                        <img 
+                            src={`https://source.unsplash.com/600x400/?${destination.name},city`}
+                            style={{width: '100%', borderRadius: 8}}
+                            alt="Destino" 
+                        />
                     </div>
                 </div>
-            </main>
-
-            {/* FOOTER */}
-            <footer>
-                <p>© 2025 Rutas Inteligencia Artificial | Todos los derechos reservados</p>
-            </footer>
+            </div>
         </div>
     );
-};
-
-export default PlanearViaje;
+}

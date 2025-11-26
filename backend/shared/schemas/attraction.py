@@ -5,7 +5,7 @@ Schemas para atracciones turísticas
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from datetime import datetime
-from .base import ResponseBase, TimestampMixin
+from .base import Location, ResponseBase, TimestampMixin
 
 if TYPE_CHECKING:
     from .destination import DestinationRead
@@ -34,7 +34,7 @@ class AttractionBase(BaseModel):
 class AttractionCreate(AttractionBase):
     """Schema para crear una atracción"""
     destination_id: int = Field(..., gt=0, description="ID del destino")
-    location: Dict[str, float] = Field(..., description="Coordenadas geográficas")
+    location: Location = Field(..., description="Coordenadas geográficas")
     # Formato: {"lat": -12.0464, "lon": -77.0428}
     
     tags: Optional[List[str]] = Field(None, description="Etiquetas descriptivas")

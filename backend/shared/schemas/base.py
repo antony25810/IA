@@ -2,7 +2,7 @@
 """
 Schemas base y utilidades reutilizables
 """
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Optional
 
@@ -45,3 +45,7 @@ class MessageResponse(BaseModel):
     """Respuesta simple con mensaje"""
     message: str
     detail: Optional[str] = None
+
+class Location(BaseModel):
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)

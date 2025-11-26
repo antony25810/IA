@@ -35,6 +35,7 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ attractions, segments, heig
     const layersRef = useRef<L.LayerGroup | null>(null);
 
     useEffect(() => {
+        if (attractions.length === 0) return;
         // Inicializar mapa
         if (!mapRef.current) {
             mapRef.current = L. map('route-map'). setView(
@@ -56,7 +57,7 @@ const RouteMapView: React.FC<RouteMapViewProps> = ({ attractions, segments, heig
                 mapRef.current = null;
             }
         };
-    }, []);
+    }, [attractions]);
 
     useEffect(() => {
         if (! mapRef.current || !layersRef.current) return;

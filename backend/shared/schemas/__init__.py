@@ -130,12 +130,21 @@ __all__ = [
     
     # Itinerary
     "ItineraryBase",
-    "RouteDataSchema",
     "ItineraryCreate",
     "ItineraryUpdate",
     "ItineraryRead",
     "ItineraryWithDetails",
-    "ItinerarySearchParams",
+    "ItineraryWithDays",
+    "ItineraryDayBase",
+    "ItineraryDayCreate",
+    "ItineraryDayRead",
+    "ItineraryDayUpdate",
+    "AttractionInDay",
+    "RouteSegment",
+    "DaySummary",
+    "DayData",
+    "ItineraryGenerationRequest",
+    "ItineraryGenerationResponse",
     
     # Review & Rating
     "ReviewBase",

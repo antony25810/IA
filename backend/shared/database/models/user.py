@@ -19,5 +19,5 @@ class User(Base):
     # Relación 1-a-1 con el Perfil
     profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
-def __repr__(self):
-        return f"<User(id={self.id}, email={self.email})>"
+    def __repr__(self):
+            return f"<User(id={self.id}, email={self.email})>"

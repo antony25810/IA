@@ -1,281 +1,308 @@
 'use client';
-import React, { useState, useEffect } from "react";
-import Link from 'next/link';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link'; // Importante para el header
 import { useAuth } from '../../context/AuthContext';
-import { getDestinations, getTopAttractions } from '../../services/destinationService';
-import { getUserProfileByUserId } from '../../services/profileService';
-import { getRulesRecommendations, buildCurrentContext } from '../../services/ruleService';
-import { Destination, Attraction } from '../../types';
-import '../styles/destino.css';
+import { 
+    createUserProfile, 
+    getUserProfileByUserId, 
+    updateUserProfile 
+} from '../../services/profileService';
+import { UserProfile } from '../../types';
+import '../styles/perfil.css'; 
 
-const DestinosViaje: React.FC = () => {
-  const { user } = useAuth();
-  const [destinations, setDestinations] = useState<Destination[]>([]);
-  const [selectedDest, setSelectedDest] = useState<Destination | null>(null);
-  const [destAttractions, setDestAttractions] = useState<Attraction[]>([]);
-  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userProfileId, setUserProfileId] = useState<number | null>(null);
+const ProfilePage = () => {
+    const { user, login } = useAuth(); 
+    const router = useRouter();
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [existingProfileId, setExistingProfileId] = useState<number | null>(null);
 
-  // Cargar destinos y perfil del usuario
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        // 1. Cargar destinos
-        const data = await getDestinations();
-        setDestinations(data);
-        
-        // 2.  Cargar perfil del usuario
-        if (user?.id) {
-          const profile = await getUserProfileByUserId(user.id);
-          setUserProfileId(profile.id);
+    // Estado inicial del formulario
+    const [formData, setFormData] = useState<Partial<UserProfile>>({
+        budget_range: 'medio',
+        budget_min: 50,
+        budget_max: 150,
+        mobility_level: 'high',
+        preferences: {
+            interests: [],
+            tourism_type: 'cultural',
+            pace: 'moderate',
+            dietary_restrictions: [],
+            accessibility_needs: []
+        },
+        mobility_constraints: {
+            has_wheelchair: false,
+            max_walking_distance: 5000,
+            requires_elevator: false
         }
+    });
+
+    // Cargar perfil existente al entrar
+    useEffect(() => {
+        const loadProfile = async () => {
+            if (!user) return;
+            try {
+                const profile = await getUserProfileByUserId(user.id);
+                if (profile) {
+                    setExistingProfileId(profile.id!);
+                    // Rellenar formulario con datos existentes de la BD
+                    setFormData({
+                        budget_range: profile.budget_range,
+                        budget_min: profile.budget_min,
+                        budget_max: profile.budget_max,
+                        mobility_level: profile.mobility_level,
+                        preferences: profile.preferences,
+                        mobility_constraints: profile.mobility_constraints
+                    });
+                }
+            } catch (err) {
+                console.log("Usuario nuevo, listo para crear perfil.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadProfile();
+    }, [user]);
+
+    // Manejar selección de intereses (Toggle)
+    const handleInterestChange = (interest: string) => {
+        const currentInterests = formData.preferences?.interests || [];
+        const newInterests = currentInterests.includes(interest)
+            ? currentInterests.filter(i => i !== interest)
+            : [...currentInterests, interest];
         
-        // 3. Seleccionar primer destino
-        if (data. length > 0) {
-          handleSelectDestination(data[0]);
-        }
-      } catch (err) {
-        console.error("Error cargando datos iniciales", err);
-      } finally {
-        setLoading(false);
-      }
+        setFormData(prev => ({
+            ...prev,
+            preferences: { ...prev.preferences!, interests: newInterests }
+        }));
     };
-    
-    fetchInitialData();
-  }, [user]);
 
-  // Manejar selección de destino
-  const handleSelectDestination = async (dest: Destination) => {
-    setSelectedDest(dest);
-    setAiRecommendations([]);
-    
-    try {
-      // 1. Cargar atracciones del destino
-      const attrs = await getTopAttractions(dest.id);
-      setDestAttractions(attrs);
-      
-      // 2. Obtener recomendaciones de IA si el usuario está logueado
-      if (userProfileId) {
-        const context = buildCurrentContext({
-          location: {
-            city: dest.name,
-            country: dest.country
-          }
-        });
-        
-        const recs = await getRulesRecommendations(userProfileId, context);
-        setAiRecommendations(recs. recommendations || []);
-      }
-    } catch (err) {
-      console.error("Error cargando detalles del destino", err);
-    }
-  };
+    // Guardar datos
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user) return;
+        setSaving(true);
+        setError(null);
 
-  // Parsear coordenadas WKT "POINT(lon lat)"
-  const getCoordinates = (wkt: string) => {
-    try {
-      const clean = wkt.replace('POINT(', '').replace(')', '');
-      const [lon, lat] = clean.split(' ');
-      return { lat, lon };
-    } catch (e) {
-      return { lat: '0', lon: '0' };
-    }
-  };
+        try {
+            // Preparar payload asegurando tipos numéricos
+            const payload = {
+                ...formData,
+                user_id: user.id,
+                budget_min: Number(formData.budget_min),
+                budget_max: Number(formData.budget_max),
+                mobility_constraints: {
+                    ...formData.mobility_constraints!,
+                    max_walking_distance: Number(formData.mobility_constraints?.max_walking_distance)
+                }
+            };
 
-  return (
-    <div>
-      {/* HEADER */}
-      <header>
-        <h1>RUTAS INTELIGENCIA ARTIFICIAL</h1>
-        <nav>
-          <Link href="/">Inicio</Link>
-          <Link href="/Destino">Destinos</Link>
-          <Link href="/profile">Perfil</Link>
-          <Link href="/Contacto">Contacto</Link>
-        </nav>
-        <div className="user-icon"></div>
-      </header>
+            let response;
+            if (existingProfileId) {
+                // ACTUALIZAR
+                response = await updateUserProfile(existingProfileId, payload);
+            } else {
+                // CREAR NUEVO
+                response = await createUserProfile(payload);
+                // Actualizar sesión local para que sepa que ya tiene perfil
+                if (user && response.id) {
+                    const updatedUser = { ...user, user_profile_id: response.id };
+                    login(localStorage.getItem('token') || '', updatedUser);
+                }
+            }
 
-      {/* CONTENIDO PRINCIPAL */}
-      <section className="container">
-        
-        {/* Lado izquierdo: Lista de Destinos */}
-        <div className="categorias">
-          {loading ? (
-            <p>Cargando destinos... </p>
-          ) : (
-            destinations.map((dest) => (
-              <div 
-                key={dest.id} 
-                className="tarjeta" 
-                onClick={() => handleSelectDestination(dest)}
-                style={{ 
-                  cursor: 'pointer',
-                  border: selectedDest?.id === dest.id ? '2px solid #004a8f' : 'none' 
-                }}
-              >
-                <img 
-                  src={`https://source.unsplash.com/800x600/?${dest.name},travel`} 
-                  alt={dest.name}
-                  onError={(e) => e.currentTarget.src = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee'} 
-                />
-                <div className="tarjeta-content">
-                  <h3>{dest.name}</h3>
-                  <p className="text-sm text-gray-500">{dest.country}</p>
-                  <p style={{marginTop: 5}}>
-                    {dest.description?. substring(0, 60)}...
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+            // ✅ REDIRECCIÓN CORRECTA: Al terminar, ir a Destinos
+            router.push('/Destino');
+            
+        } catch (err: any) {
+            console.error(err);
+            setError(err.message || "Error guardando el perfil");
+        } finally {
+            setSaving(false);
+        }
+    };
 
-        {/* Lado derecho: Detalles del Destino */}
-        <div className="contenido">
-          {selectedDest ? (
-            <>
-              <h1>Explora: {selectedDest.name}</h1>
-              <h4 style={{color: '#004a8f', marginTop: -5, marginBottom: 15}}>
-                {selectedDest.state ?  `${selectedDest.state}, ` : ''}{selectedDest.country}
-              </h4>
-              
-              <p>{selectedDest.description || "Descubre las maravillas de este destino turístico."}</p>
-              
-              {/* Recomendaciones de IA */}
-              {aiRecommendations.length > 0 && (
-                <div style={{ 
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-                  padding: 15, 
-                  borderRadius: 10, 
-                  marginTop: 20,
-                  color: 'white'
-                }}>
-                  <h3 style={{ margin: '0 0 10px 0' }}> Recomendaciones de IA para ti</h3>
-                  {aiRecommendations.map((rec, idx) => (
-                    <div key={idx} style={{ 
-                      background: 'rgba(255,255,255,0.1)', 
-                      padding: 10, 
-                      borderRadius: 8,
-                      marginBottom: 8
-                    }}>
-                      <strong style={{ fontSize: 14 }}>{rec.suggestion}</strong>
-                      <p style={{ margin: '5px 0 0 0', fontSize: 12, opacity: 0.9 }}>
-                        {rec.reason}
-                      </p>
-                      <span style={{ 
-                        fontSize: 11, 
-                        background: rec.priority === 'high' ? '#ff6b6b' : '#51cf66',
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        marginTop: 5,
-                        display: 'inline-block'
-                      }}>
-                        Prioridad: {rec.priority}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Mapa Dinámico */}
-              {(() => {
-                const coords = getCoordinates(selectedDest.location);
-                return (
-                  <iframe
-                    width="100%"
-                    height="400"
-                    style={{ border: 0, borderRadius: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.1)', marginTop: 20 }}
-                    loading="lazy"
-                    allowFullScreen
-                    src={`https://maps.google.com/maps?q=${coords.lat},${coords.lon}&z=12&output=embed`}
-                  ></iframe>
-                );
-              })()}
+    if (loading) return <div style={{padding: 50, textAlign: 'center'}}>Cargando perfil...</div>;
 
-              {/* Atracciones Principales */}
-              <div style={{ marginTop: 30 }}>
-                <h3 style={{ color: '#004a8f' }}>Atracciones Principales en {selectedDest.name}</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 15, marginTop: 15 }}>
-                  {destAttractions.length > 0 ? (
-                    destAttractions. map(attr => (
-                      <div key={attr.id} style={{ background: '#f8f9fb', padding: 10, borderRadius: 8 }}>
-                        <h4 style={{ margin: '0 0 5px 0', fontSize: 15 }}>{attr.name}</h4>
-                        <span style={{ fontSize: 12, background: '#e2e6ea', padding: '2px 6px', borderRadius: 4 }}>
-                          {attr.category}
-                        </span>
-                        {attr.rating && (
-                          <p style={{ fontSize: 13, margin: '5px 0 0 0', color: '#555' }}>
-                            ⭐ {attr.rating}/5
-                          </p>
-                        )}
-                        <p style={{ fontSize: 13, margin: '5px 0 0 0', color: '#555' }}>
-                          {attr.price_range ?  `Precio: ${attr.price_range}` : 'Precio variado'}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No hay atracciones registradas aún.</p>
-                  )}
-                </div>
-              </div>
-              
-              <div style={{ marginTop: 20 }}>
-                <Link 
-                  href={`/planear/${selectedDest.id}`}
-                  style={{
-                    background: '#004a8f', 
-                    color: 'white', 
-                    padding: '12px 20px', 
-                    border: 'none', 
-                    borderRadius: 8, 
-                    cursor: 'pointer', 
-                    fontSize: 16,
-                    textDecoration: 'none',
-                    display: 'inline-block'
-                  }}
-                >
-                  Planear viaje a {selectedDest.name}
-                </Link>
-              </div>
-            </>
-          ) : (
-            <div style={{ textAlign: 'center', marginTop: 50 }}>
-              <h2>Selecciona un destino para ver detalles</h2>
-              <p>Explora nuestra base de datos de lugares increíbles. </p>
+    return (
+        <div style={{minHeight: '100vh', display: 'flex', flexDirection: 'column'}}>
+            <header>
+                <h1>TRIPWISE AI - MI PERFIL</h1>
+                <nav>
+                   <Link href="/Destino">Destinos</Link>
+                   <Link href="/">Salir</Link>
+                </nav>
+            </header>
+
+            {/* Encabezado de Usuario */}
+            <div className="profile-header">
+                <div className="user-icon" style={{
+                    width: 100, height: 100, margin: '0 auto', 
+                    fontSize: 50, display:'flex', alignItems:'center', justifyContent:'center',
+                    background: 'white', color: '#004a8f'
+                }}>👤</div>
+                <h2>{user?.name || 'Viajero'}</h2>
+                <p>{user?.email}</p>
             </div>
-          )}
-        </div>
-      </section>
 
-      {/* BENEFICIOS */}
-      <section className="beneficios">
-        <div className="beneficio">
-          <h3>🌎 IA Inteligente</h3>
-          <p>Análisis de datos en tiempo real de {destinations.length} destinos disponibles.</p>
-        </div>
-        <div className="beneficio">
-          <h3>🕒 Optimización</h3>
-          <p>Algoritmos A* y BFS para calcular las rutas más eficientes.</p>
-        </div>
-        <div className="beneficio">
-          <h3>💰 Presupuesto</h3>
-          <p>Filtra atracciones según tu rango de precios preferido.</p>
-        </div>
-      </section>
+            <form onSubmit={handleSubmit} className="main-content">
+                {error && (
+                    <div style={{gridColumn: '1/-1', background:'#ffebee', color: '#c62828', padding: 15, borderRadius: 8, textAlign: 'center'}}>
+                        {error}
+                    </div>
+                )}
 
-      {/* FRASE MOTIVACIONAL */}
-      <section className="frase">
-        <p>"Cada destino tiene una historia, y la tuya apenas comienza."</p>
-      </section>
+                {/* TARJETA 1: Preferencias */}
+                <div className="card preferences">
+                    <h3>🎭 Preferencias de Viaje</h3>
+                    
+                    <label>Tipo de Turismo:</label>
+                    <select 
+                        value={formData.preferences?.tourism_type} 
+                        onChange={e => setFormData({...formData, preferences: {...formData.preferences!, tourism_type: e.target.value as any}})}
+                    >
+                        <option value="cultural">🏛️ Cultural (Museos, Historia)</option>
+                        <option value="aventura">hiking Aventura (Naturaleza, Deporte)</option>
+                        <option value="gastronomia">🥘 Gastronomía (Comida, Mercados)</option>
+                        <option value="familiar">👨‍👩‍👧‍👦 Familiar (Parques, Zoos)</option>
+                        <option value="relax">🧘 Relax (Plazas, Caminatas)</option>
+                    </select>
 
-      {/* FOOTER */}
-      <footer>
-        <p>© 2025 Rutas Inteligencia Artificial | Todos los derechos reservados</p>
-      </footer>
-    </div>
-  );
+                    <label>Ritmo de Viaje:</label>
+                    <select
+                        value={formData.preferences?.pace}
+                        onChange={e => setFormData({...formData, preferences: {...formData.preferences!, pace: e.target.value as any}})}
+                    >
+                        <option value="relaxed">Relajado (Pocas paradas)</option>
+                        <option value="moderate">Moderado (Equilibrado)</option>
+                        <option value="intense">Intenso (Ver todo lo posible)</option>
+                    </select>
+
+                    <label style={{marginTop: 15}}>Intereses (Selecciona varios):</label>
+                    <div style={{display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8}}>
+                        {['historia', 'arte', 'naturaleza', 'compras', 'vida_nocturna', 'fotografia'].map(tag => (
+                            <button
+                                type="button"
+                                key={tag}
+                                onClick={() => handleInterestChange(tag)}
+                                style={{
+                                    padding: '6px 14px',
+                                    borderRadius: 20,
+                                    border: '1px solid #004a8f',
+                                    background: formData.preferences?.interests?.includes(tag) ? '#004a8f' : 'white',
+                                    color: formData.preferences?.interests?.includes(tag) ? 'white' : '#004a8f',
+                                    cursor: 'pointer',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* TARJETA 2: Presupuesto */}
+                <div className="card">
+                    <h3>💰 Presupuesto</h3>
+                    
+                    <label>Nivel de Presupuesto:</label>
+                    <select
+                        value={formData.budget_range}
+                        onChange={e => setFormData({...formData, budget_range: e.target.value as any})}
+                        style={{width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', marginBottom: 15}}
+                    >
+                        <option value="bajo">Bajo (Económico)</option>
+                        <option value="medio">Medio (Estándar)</option>
+                        <option value="alto">Alto (Confort)</option>
+                        <option value="lujo">Lujo (Premium)</option>
+                    </select>
+
+                    <div style={{display: 'flex', gap: 15}}>
+                        <div style={{flex: 1}}>
+                            <label>Mínimo ($):</label>
+                            <input 
+                                type="number" 
+                                value={formData.budget_min}
+                                onChange={e => setFormData({...formData, budget_min: Number(e.target.value)})}
+                                style={{width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc'}}
+                            />
+                        </div>
+                        <div style={{flex: 1}}>
+                            <label>Máximo ($):</label>
+                            <input 
+                                type="number" 
+                                value={formData.budget_max}
+                                onChange={e => setFormData({...formData, budget_max: Number(e.target.value)})}
+                                style={{width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc'}}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* TARJETA 3: Movilidad */}
+                <div className="card">
+                    <h3>🚶 Movilidad</h3>
+                    
+                    <label>Nivel Físico:</label>
+                    <select
+                        value={formData.mobility_level}
+                        onChange={e => setFormData({...formData, mobility_level: e.target.value as any})}
+                        style={{width: '100%', padding: 10, borderRadius: 8, border: '1px solid #ccc', marginBottom: 15}}
+                    >
+                        <option value="high">Alto (Sin problemas)</option>
+                        <option value="medium">Medio (Caminatas normales)</option>
+                        <option value="low">Bajo (Movilidad reducida)</option>
+                    </select>
+
+                    <label>Distancia Máxima Caminando:</label>
+                    <input 
+                        type="range" 
+                        min="100" 
+                        max="10000" 
+                        step="100"
+                        value={formData.mobility_constraints?.max_walking_distance}
+                        onChange={e => setFormData({
+                            ...formData, 
+                            mobility_constraints: {...formData.mobility_constraints!, max_walking_distance: Number(e.target.value)}
+                        })}
+                        style={{width: '100%', margin: '10px 0'}}
+                    />
+                    <p style={{textAlign: 'right', fontWeight: 'bold', color: '#004a8f'}}>
+                        {formData.mobility_constraints?.max_walking_distance} metros
+                    </p>
+                </div>
+
+                {/* BOTÓN GUARDAR */}
+                <div style={{gridColumn: '1/-1', textAlign: 'center', marginTop: 20}}>
+                    <button 
+                        type="submit" 
+                        disabled={saving}
+                        style={{
+                            background: 'linear-gradient(135deg, #4caf50 0%, #45a049 100%)',
+                            color: 'white',
+                            padding: '16px 48px',
+                            border: 'none',
+                            borderRadius: 30,
+                            fontSize: 18,
+                            fontWeight: 'bold',
+                            cursor: saving ? 'not-allowed' : 'pointer',
+                            boxShadow: '0 4px 15px rgba(76, 175, 80, 0.4)',
+                            transition: 'transform 0.2s'
+                        }}
+                    >
+                        {saving ? 'Guardando...' : existingProfileId ? 'Actualizar Perfil' : 'Crear Perfil y Continuar'}
+                    </button>
+                </div>
+
+            </form>
+            
+            <footer style={{marginTop: 'auto', background: '#004a8f', color: 'white', textAlign: 'center', padding: 15}}>
+                <p>© 2025 TripWise AI</p>
+            </footer>
+        </div>
+    );
 };
 
-export default DestinosViaje;
+export default ProfilePage;

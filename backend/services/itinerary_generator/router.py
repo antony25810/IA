@@ -4,6 +4,7 @@ Endpoints REST para generación de itinerarios (VERSIÓN MEJORADA)
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Query
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from shared.database.base import get_db
@@ -33,7 +34,7 @@ router = APIRouter(
     summary="Generar itinerario completo",
     description="Genera un itinerario multi-día y lo guarda en BD"
 )
-def generate_itinerary(
+async def generate_itinerary(
     request: ItineraryGenerationRequest,
     db: Session = Depends(get_db)
 ):
@@ -59,7 +60,8 @@ def generate_itinerary(
         
         hotel_point = request.hotel_id if request.hotel_id else request.city_center_id
         
-        result = service.generate_itinerary(
+        result = await run_in_threadpool(
+            service.generate_itinerary, 
             user_profile_id=request.user_profile_id,
             destination_id=center_attr.destination_id,
             city_center_attraction_id=request.city_center_id,

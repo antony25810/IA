@@ -294,7 +294,7 @@ async def explain_rules(
     return result
 
 
-@router.get("/recommendations/{user_profile_id}")
+@router.post("/recommendations/{user_profile_id}")
 async def get_recommendations(
     user_profile_id: int = Path(..., description="ID del perfil de usuario", ge=1, example=1),
     context: Optional[EnrichmentContext] = Body(

@@ -1,380 +1,240 @@
 # backend/scripts/seed_data.py
-"""
-Script para cargar datos de prueba en la base de datos
-"""
 import sys
-from pathlib import Path
+import os
+from math import radians, cos, sin, asin, sqrt
 
-# Agregar el directorio raíz al path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+# Agregar directorio raíz al path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.orm import Session
-from shared.database.base import SessionLocal
-from shared.database.models import (
-    Destination, Attraction, AttractionConnection,
-    UserProfile, Itinerary, Review
-)
-from datetime import datetime, timezone
-import json
+from geoalchemy2.elements import WKTElement # type: ignore
+from shared.database.base import SessionLocal, engine, Base
+from shared.database.models import Destination, Attraction, AttractionConnection, User, UserProfile
+from shared.security import get_password_hash
 
+def haversine_distance(lon1, lat1, lon2, lat2):
+    """Calcula distancia en metros entre dos puntos"""
+    R = 6371000  # Radio tierra en metros
+    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+    c = 2 * asin(sqrt(a))
+    return R * c
 
-def create_destinations(db: Session):
-    """Crear destinos de ejemplo"""
-    destinations = [
-        {
-            "name": "Lima",
-            "country": "Perú",
-            "state": "Lima",
-            "location": "POINT(-77.0428 -12.0464)",
-            "timezone": "America/Lima",
-            "description": "Capital del Perú, ciudad histórica con gran oferta gastronómica",
-            "population": 10000000
-        },
-        {
-            "name": "Cusco",
-            "country": "Perú",
-            "state": "Cusco",
-            "location": "POINT(-71.9675 -13.5319)",
-            "timezone": "America/Lima",
-            "description": "Antigua capital del Imperio Inca, patrimonio de la humanidad",
-            "population": 500000
-        }
-    ]
-    
-    for dest_data in destinations:
-        dest = Destination(**dest_data)
-        db.add(dest)
-    
-    db.commit()
-    print("✅ Destinos creados")
-
-
-def create_attractions(db: Session):
-    """Crear atracciones de ejemplo para Lima"""
-    attractions = [
-        {
-            "destination_id": 1,
-            "name": "Plaza Mayor de Lima",
-            "description": "Plaza histórica, centro del poder colonial español",
-            "category": "historico",
-            "subcategory": "plaza",
-            "tags": ["historia", "arquitectura", "colonial"],
-            "location": "POINT(-77.0301 -12.0464)",
-            "address": "Jr. de la Unión, Cercado de Lima",
-            "average_visit_duration": 45,
-            "price_range": "gratis",
-            "price_min": 0,
-            "price_max": 0,
-            "opening_hours": {
-                "lunes": {"open": "00:00", "close": "23:59"},
-                "martes": {"open": "00:00", "close": "23:59"},
-                "miercoles": {"open": "00:00", "close": "23:59"},
-                "jueves": {"open": "00:00", "close": "23:59"},
-                "viernes": {"open": "00:00", "close": "23:59"},
-                "sabado": {"open": "00:00", "close": "23:59"},
-                "domingo": {"open": "00:00", "close": "23:59"}
-            },
-            "rating": 4.5,
-            "total_reviews": 1520,
-            "popularity_score": 95.5,
-            "verified": True,
-            "data_source": "manual",
-            "accessibility": {
-                "wheelchair": True,
-                "parking": False,
-                "wifi": False
-            },
-            "images": [
-                {"url": "https://example.com/plaza-mayor.jpg", "caption": "Plaza Mayor de Lima"}
-            ]
-        },
-        {
-            "destination_id": 1,
-            "name": "Museo Larco",
-            "description": "Museo de arte precolombino en una mansión del siglo XVIII",
-            "category": "cultural",
-            "subcategory": "museo",
-            "tags": ["museo", "arte", "precolombino", "ceramica"],
-            "location": "POINT(-77.0691 -12.0699)",
-            "address": "Av. Bolívar 1515, Pueblo Libre",
-            "average_visit_duration": 120,
-            "price_range": "medio",
-            "price_min": 30,
-            "price_max": 35,
-            "opening_hours": {
-                "lunes": {"open": "09:00", "close": "22:00"},
-                "martes": {"open": "09:00", "close": "22:00"},
-                "miercoles": {"open": "09:00", "close": "22:00"},
-                "jueves": {"open": "09:00", "close": "22:00"},
-                "viernes": {"open": "09:00", "close": "22:00"},
-                "sabado": {"open": "09:00", "close": "22:00"},
-                "domingo": {"open": "09:00", "close": "22:00"}
-            },
-            "rating": 4.8,
-            "total_reviews": 3420,
-            "popularity_score": 88.3,
-            "verified": True,
-            "data_source": "google_places",
-            "accessibility": {
-                "wheelchair": True,
-                "parking": True,
-                "wifi": True
-            },
-            "extra_data": {  # ⬅️ Cambiado de metadata a extra_data
-                "website": "https://www.museolarco.org",
-                "phone": "+51 1 461 1312"
-            },
-            "images": [
-                {"url": "https://example.com/larco-1.jpg", "caption": "Entrada principal"}
-            ]
-        },
-        {
-            "destination_id": 1,
-            "name": "Parque de las Aguas",
-            "description": "Complejo de fuentes cibernéticas con espectáculos nocturnos",
-            "category": "entretenimiento",
-            "subcategory": "parque",
-            "tags": ["familia", "entretenimiento", "fuentes", "espectaculo"],
-            "location": "POINT(-77.0324 -12.0709)",
-            "address": "Jr. Madre de Dios, Cercado de Lima",
-            "average_visit_duration": 90,
-            "price_range": "bajo",
-            "price_min": 4,
-            "price_max": 4,
-            "opening_hours": {
-                "martes": {"open": "15:00", "close": "22:30"},
-                "miercoles": {"open": "15:00", "close": "22:30"},
-                "jueves": {"open": "15:00", "close": "22:30"},
-                "viernes": {"open": "15:00", "close": "22:30"},
-                "sabado": {"open": "15:00", "close": "22:30"},
-                "domingo": {"open": "15:00", "close": "22:30"}
-            },
-            "rating": 4.3,
-            "total_reviews": 890,
-            "popularity_score": 72.1,
-            "verified": True,
-            "data_source": "manual",
-            "accessibility": {
-                "wheelchair": True,
-                "parking": True,
-                "wifi": False
-            }
-        },
-        {
-            "destination_id": 1,
-            "name": "Mercado Surquillo",
-            "description": "Mercado local tradicional con gastronomía peruana",
-            "category": "gastronomia",
-            "subcategory": "mercado",
-            "tags": ["gastronomia", "local", "autentico", "comida"],
-            "location": "POINT(-77.0198 -12.1116)",
-            "address": "Av. Paseo de la República, Surquillo",
-            "average_visit_duration": 60,
-            "price_range": "bajo",
-            "price_min": 10,
-            "price_max": 30,
-            "opening_hours": {
-                "lunes": {"open": "06:00", "close": "18:00"},
-                "martes": {"open": "06:00", "close": "18:00"},
-                "miercoles": {"open": "06:00", "close": "18:00"},
-                "jueves": {"open": "06:00", "close": "18:00"},
-                "viernes": {"open": "06:00", "close": "18:00"},
-                "sabado": {"open": "06:00", "close": "18:00"},
-                "domingo": {"open": "06:00", "close": "14:00"}
-            },
-            "rating": 4.6,
-            "total_reviews": 567,
-            "popularity_score": 65.4,
-            "verified": True,
-            "data_source": "manual"
-        }
-    ]
-    
-    for attr_data in attractions:
-        attr = Attraction(**attr_data)
-        db.add(attr)
-    
-    db.commit()
-    print("✅ Atracciones creadas")
-
-
-def create_connections(db: Session):
-    """Crear conexiones entre atracciones"""
-    connections = [
-        {
-            "from_attraction_id": 1,  # Plaza Mayor
-            "to_attraction_id": 2,    # Museo Larco
-            "distance_meters": 5200,
-            "travel_time_minutes": 20,
-            "transport_mode": "car",
-            "cost": 15.0,
-            "route_geometry": "LINESTRING(-77.0301 -12.0464, -77.0691 -12.0699)",
-            "traffic_factor": 1.2
-        },
-        {
-            "from_attraction_id": 1,
-            "to_attraction_id": 3,  # Parque de las Aguas
-            "distance_meters": 2800,
-            "travel_time_minutes": 35,
-            "transport_mode": "walking",
-            "cost": 0.0,
-            "route_geometry": "LINESTRING(-77.0301 -12.0464, -77.0324 -12.0709)",
-            "traffic_factor": 1.0
-        },
-        {
-            "from_attraction_id": 2,
-            "to_attraction_id": 4,  # Museo a Mercado
-            "distance_meters": 4100,
-            "travel_time_minutes": 15,
-            "transport_mode": "car",
-            "cost": 12.0,
-            "route_geometry": "LINESTRING(-77.0691 -12.0699, -77.0198 -12.1116)",
-            "traffic_factor": 1.1
-        },
-        {
-            "from_attraction_id": 3,
-            "to_attraction_id": 4,
-            "distance_meters": 3500,
-            "travel_time_minutes": 12,
-            "transport_mode": "public_transport",
-            "cost": 2.5,
-            "route_geometry": "LINESTRING(-77.0324 -12.0709, -77.0198 -12.1116)",
-            "traffic_factor": 1.0
-        }
-    ]
-    
-    for conn_data in connections:
-        conn = AttractionConnection(**conn_data)
-        db.add(conn)
-    
-    db.commit()
-    print("✅ Conexiones creadas")
-
-
-def create_user_profiles(db: Session):
-    """Crear perfiles de usuario de ejemplo"""
-    profiles = [
-        {
-            "name": "Juan Pérez",
-            "email": "juan.perez@example.com",
-            "preferences": {
-                "interests": ["cultural", "historia", "gastronomia"],
-                "tourism_type": "cultural",
-                "pace": "moderate",
-                "accessibility_needs": [],
-                "dietary_restrictions": []
-            },
-            "budget_range": "medio",
-            "budget_min": 100,
-            "budget_max": 300,
-            "mobility_constraints": {
-                "max_walking_distance": 3000,
-                "preferred_transport": ["walking", "car"],
-                "avoid_transport": []
-            }
-        },
-        {
-            "name": "María González",
-            "email": "maria.gonzalez@example.com",
-            "preferences": {
-                "interests": ["aventura", "naturaleza", "deportivo"],
-                "tourism_type": "aventura",
-                "pace": "intense",
-                "accessibility_needs": [],
-                "dietary_restrictions": ["vegetarian"]
-            },
-            "budget_range": "alto",
-            "budget_min": 300,
-            "budget_max": 600,
-            "mobility_constraints": {
-                "max_walking_distance": 5000,
-                "preferred_transport": ["walking", "bicycle"],
-                "avoid_transport": ["car"]
-            }
-        }
-    ]
-    
-    for profile_data in profiles:
-        profile = UserProfile(**profile_data)
-        db.add(profile)
-    
-    db.commit()
-    print("✅ Perfiles de usuario creados")
-
-
-def create_reviews(db: Session):
-    """Crear reseñas de ejemplo"""
-    reviews = [
-        {
-            "attraction_id": 1,
-            "source": "google_places",
-            "text": "Hermosa plaza histórica en el corazón de Lima. Muy bien conservada.",
-            "rating": 5,
-            "sentiment_score": 0.85,
-            "sentiment_label": "positive",
-            "language": "es",
-            "author": "Usuario123",
-            "review_date": datetime(2025, 1, 15, tzinfo=timezone.utc)
-        },
-        {
-            "attraction_id": 2,
-            "source": "tripadvisor",
-            "text": "El Museo Larco es increíble. La colección de cerámica precolombina es impresionante.",
-            "rating": 5,
-            "sentiment_score": 0.92,
-            "sentiment_label": "positive",
-            "language": "es",
-            "author": "Viajero456",
-            "review_date": datetime(2025, 1, 10, tzinfo=timezone.utc)
-        },
-        {
-            "attraction_id": 3,
-            "source": "google_places",
-            "text": "Lindo parque para ir en familia. El show de luces es espectacular.",
-            "rating": 4,
-            "sentiment_score": 0.75,
-            "sentiment_label": "positive",
-            "language": "es",
-            "author": "Familia789",
-            "review_date": datetime(2025, 1, 12, tzinfo=timezone.utc)
-        }
-    ]
-    
-    for review_data in reviews:
-        review = Review(**review_data)
-        db.add(review)
-    
-    db.commit()
-    print("✅ Reseñas creadas")
-
-
-def main():
-    """Función principal"""
-    print("🚀 Iniciando carga de datos de prueba...")
-    
+def seed():
     db = SessionLocal()
     
-    try:
-        create_destinations(db)
-        create_attractions(db)
-        create_connections(db)
-        create_user_profiles(db)
-        create_reviews(db)
-        
-        print("\n✅ ¡Datos de prueba cargados exitosamente!")
-        print("\n📊 Resumen:")
-        print(f"   - Destinos: {db.query(Destination).count()}")
-        print(f"   - Atracciones: {db.query(Attraction).count()}")
-        print(f"   - Conexiones: {db.query(AttractionConnection).count()}")
-        print(f"   - Perfiles: {db.query(UserProfile).count()}")
-        print(f"   - Reseñas: {db.query(Review).count()}")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+    # Opcional: Limpiar tablas antes de empezar (Descomentar si quieres resetear)
+    # print("🗑️ Limpiando base de datos...")
+    # Base.metadata.drop_all(bind=engine)
+    # Base.metadata.create_all(bind=engine)
 
+    print("🌱 Iniciando 'Golden Dataset' para CDMX...")
+
+    # ---------------------------------------------------
+    # 1. CREAR DESTINO
+    # ---------------------------------------------------
+    cdmx = db.query(Destination).filter(Destination.name == "Ciudad de México").first()
+    if not cdmx:
+        cdmx = Destination(
+            name="Ciudad de México",
+            country="México",
+            state="CDMX",
+            description="Una de las ciudades más grandes y vibrantes del mundo, mezcla de historia prehispánica, colonial y moderna.",
+            location=WKTElement("POINT(-99.1332 19.4326)", srid=4326),
+            timezone="America/Mexico_City",
+            population=22000000
+        )
+        db.add(cdmx)
+        db.commit()
+        db.refresh(cdmx)
+        print(f"✅ Destino creado: {cdmx.name}")
+    else:
+        print(f"ℹ️ Destino {cdmx.name} ya existe (ID: {cdmx.id})")
+
+    # ---------------------------------------------------
+    # 2. LISTA DE 30 ATRACCIONES (DATASET MANUAL)
+    # ---------------------------------------------------
+    # Formato WKT: POINT(LONGITUD LATITUD) -> X Y
+    
+    attractions_data = [
+        # === ZONA 1: CENTRO HISTÓRICO ===
+        {"n": "Zócalo Capitalino", "c": "historico", "s": "plaza", "l": "POINT(-99.1332 19.4326)", "r": 4.8, "p": "gratis", "d": 60},
+        {"n": "Catedral Metropolitana", "c": "religioso", "s": "iglesia", "l": "POINT(-99.1330 19.4337)", "r": 4.7, "p": "gratis", "d": 45},
+        {"n": "Templo Mayor", "c": "historico", "s": "arqueologia", "l": "POINT(-99.1313 19.4350)", "r": 4.8, "p": "bajo", "d": 90},
+        {"n": "Palacio Nacional", "c": "historico", "s": "gobierno", "l": "POINT(-99.1310 19.4320)", "r": 4.6, "p": "gratis", "d": 60},
+        {"n": "Torre Latinoamericana", "c": "entretenimiento", "s": "mirador", "l": "POINT(-99.1406 19.4339)", "r": 4.5, "p": "medio", "d": 90},
+        {"n": "Palacio de Bellas Artes", "c": "cultural", "s": "arte", "l": "POINT(-99.1412 19.4352)", "r": 4.9, "p": "medio", "d": 120},
+        {"n": "Alameda Central", "c": "naturaleza", "s": "parque", "l": "POINT(-99.1440 19.4356)", "r": 4.6, "p": "gratis", "d": 45},
+        {"n": "Museo Memoria y Tolerancia", "c": "cultural", "s": "museo", "l": "POINT(-99.1435 19.4340)", "r": 4.8, "p": "medio", "d": 120},
+        {"n": "MUNAL (Museo Nacional de Arte)", "c": "cultural", "s": "museo", "l": "POINT(-99.1390 19.4360)", "r": 4.7, "p": "bajo", "d": 90},
+        {"n": "Barrio Chino", "c": "gastronomia", "s": "barrio", "l": "POINT(-99.1450 19.4330)", "r": 4.2, "p": "medio", "d": 60},
+
+        # === ZONA 2: CHAPULTEPEC / REFORMA / POLANCO ===
+        {"n": "Ángel de la Independencia", "c": "historico", "s": "monumento", "l": "POINT(-99.1677 19.4270)", "r": 4.8, "p": "gratis", "d": 30},
+        {"n": "Castillo de Chapultepec", "c": "historico", "s": "castillo", "l": "POINT(-99.1819 19.4204)", "r": 4.9, "p": "bajo", "d": 150},
+        {"n": "Museo Nacional de Antropología", "c": "cultural", "s": "museo", "l": "POINT(-99.1870 19.4260)", "r": 5.0, "p": "bajo", "d": 180},
+        {"n": "Museo Tamayo", "c": "cultural", "s": "museo", "l": "POINT(-99.1825 19.4265)", "r": 4.5, "p": "bajo", "d": 90},
+        {"n": "Zoológico de Chapultepec", "c": "naturaleza", "s": "zoologico", "l": "POINT(-99.1890 19.4230)", "r": 4.4, "p": "gratis", "d": 120},
+        {"n": "Auditorio Nacional", "c": "entretenimiento", "s": "teatro", "l": "POINT(-99.1920 19.4245)", "r": 4.7, "p": "alto", "d": 30},
+        {"n": "Museo Soumaya", "c": "cultural", "s": "museo", "l": "POINT(-99.2055 19.4407)", "r": 4.8, "p": "gratis", "d": 90},
+        {"n": "Acuario Inbursa", "c": "entretenimiento", "s": "acuario", "l": "POINT(-99.2060 19.4410)", "r": 4.5, "p": "alto", "d": 120},
+        {"n": "Parque Lincoln", "c": "naturaleza", "s": "parque", "l": "POINT(-99.1950 19.4300)", "r": 4.7, "p": "gratis", "d": 45},
+        {"n": "Paseo de la Reforma", "c": "naturaleza", "s": "caminata", "l": "POINT(-99.1750 19.4250)", "r": 4.8, "p": "gratis", "d": 60},
+
+        # === ZONA 3: COYOACÁN / SUR ===
+        {"n": "Museo Frida Kahlo", "c": "cultural", "s": "museo", "l": "POINT(-99.1625 19.3551)", "r": 4.6, "p": "alto", "d": 90},
+        {"n": "Mercado de Coyoacán", "c": "gastronomia", "s": "mercado", "l": "POINT(-99.1630 19.3520)", "r": 4.7, "p": "bajo", "d": 60},
+        {"n": "Jardín Centenario (Coyoacán)", "c": "naturaleza", "s": "plaza", "l": "POINT(-99.1635 19.3500)", "r": 4.8, "p": "gratis", "d": 60},
+        {"n": "Cineteca Nacional", "c": "entretenimiento", "s": "cine", "l": "POINT(-99.1650 19.3600)", "r": 4.9, "p": "bajo", "d": 120},
+        {"n": "Museo Casa de León Trotsky", "c": "historico", "s": "museo", "l": "POINT(-99.1600 19.3560)", "r": 4.5, "p": "bajo", "d": 60},
+        {"n": "Estadio Azteca", "c": "deportivo", "s": "estadio", "l": "POINT(-99.1500 19.3029)", "r": 4.7, "p": "medio", "d": 120},
+        {"n": "Ciudad Universitaria (UNAM)", "c": "cultural", "s": "universidad", "l": "POINT(-99.1850 19.3300)", "r": 4.9, "p": "gratis", "d": 120},
+        {"n": "Xochimilco", "c": "aventura", "s": "trajineras", "l": "POINT(-99.1000 19.2600)", "r": 4.4, "p": "medio", "d": 180},
+        {"n": "Six Flags México", "c": "aventura", "s": "parque", "l": "POINT(-99.2100 19.2950)", "r": 4.6, "p": "alto", "d": 360},
+        {"n": "Parque Masayoshi Ohira", "c": "naturaleza", "s": "parque", "l": "POINT(-99.1450 19.3550)", "r": 4.6, "p": "gratis", "d": 45}
+    ]
+
+    created_attrs = []
+    for item in attractions_data:
+        exists = db.query(Attraction).filter(Attraction.name == item["n"]).first()
+        if not exists:
+            attr = Attraction(
+                destination_id=cdmx.id,
+                name=item["n"],
+                category=item["c"],
+                subcategory=item["s"],
+                location=WKTElement(item["l"], srid=4326),
+                rating=item["r"],
+                price_range=item["p"],
+                description=f"Atracción icónica de la CDMX: {item['n']}",
+                average_visit_duration=item["d"],
+                verified=True
+            )
+            db.add(attr)
+            created_attrs.append(attr)
+    
+    db.commit()
+    # Refrescar para obtener IDs
+    for attr in created_attrs:
+        db.refresh(attr)
+        
+    print(f"✅ Insertadas {len(created_attrs)} nuevas atracciones.")
+    
+    # Recargar todas para conectar
+    all_attrs = db.query(Attraction).filter(Attraction.destination_id == cdmx.id).all()
+
+    # ---------------------------------------------------
+    # 3. GENERACIÓN AUTOMÁTICA DE CONEXIONES (ARISTAS)
+    # ---------------------------------------------------
+    # Lógica:
+    # - Distancia < 1.5 km -> Walking (5 km/h)
+    # - Distancia 1.5 km - 15 km -> Car/Uber (30 km/h) + Metro (35 km/h)
+    # - Distancia > 15 km -> Car/Uber (40 km/h)
+    
+    print("🔄 Generando conexiones automáticas (esto puede tardar unos segundos)...")
+    connections_count = 0
+    
+    # Limpiar conexiones previas para no duplicar
+    # db.query(AttractionConnection).delete() 
+    # db.commit()
+
+    for i, origin in enumerate(all_attrs):
+        # Extraer lat/lon del WKT string o del objeto geoalchemy
+        # Truco rápido para parsing WKT sin librerías pesadas en el script
+        try:
+            # Formato esperado: POINT(-99.1332 19.4326)
+            wkt_origin = db.scalar(origin.location.ST_AsText())
+            coords_o = wkt_origin.replace("POINT(", "").replace(")", "").split(" ")
+            lon1, lat1 = float(coords_o[0]), float(coords_o[1])
+        except:
+            continue
+
+        for j, target in enumerate(all_attrs):
+            if i == j: continue # No conectar consigo mismo
+
+            # Extraer coords destino
+            try:
+                wkt_target = db.scalar(target.location.ST_AsText())
+                coords_t = wkt_target.replace("POINT(", "").replace(")", "").split(" ")
+                lon2, lat2 = float(coords_t[0]), float(coords_t[1])
+            except:
+                continue
+
+            # Calcular distancia
+            dist_meters = haversine_distance(lon1, lat1, lon2, lat2)
+            
+            # Crear conexiones solo si tiene sentido (evitar grafo 100% conectado "todos con todos")
+            # Conectamos si está relativamente cerca o es un "hub" importante
+            
+            modes = []
+            
+            # Lógica de transporte
+            if dist_meters <= 2000: # Menos de 2km: Caminable
+                walking_time = int((dist_meters / 1000) / 4.5 * 60) # 4.5 km/h
+                modes.append(("walking", walking_time, 0))
+                
+            if dist_meters > 500 and dist_meters < 20000: # 500m a 20km: Uber/Taxi
+                car_time = int((dist_meters / 1000) / 25 * 60) + 5 # 25 km/h (tráfico CDMX) + 5 min espera
+                cost = 30 + (dist_meters / 1000 * 10) # Tarifa base + km
+                modes.append(("taxi", car_time, cost))
+                
+            if dist_meters > 1000 and dist_meters < 25000: # 1km a 25km: Transporte Público
+                # Simulación simple: Metro es más rápido pero caminas
+                transit_time = int((dist_meters / 1000) / 20 * 60) + 10 
+                modes.append(("public_transport", transit_time, 5))
+
+            # Insertar en BD
+            for mode, time_min, cost in modes:
+                # Verificar si ya existe
+                exists = db.query(AttractionConnection).filter(
+                    AttractionConnection.from_attraction_id == origin.id,
+                    AttractionConnection.to_attraction_id == target.id,
+                    AttractionConnection.transport_mode == mode
+                ).first()
+                
+                if not exists:
+                    conn = AttractionConnection(
+                        from_attraction_id=origin.id,
+                        to_attraction_id=target.id,
+                        distance_meters=dist_meters,
+                        travel_time_minutes=time_min,
+                        transport_mode=mode,
+                        cost=cost,
+                        traffic_factor=1.2 if mode == 'taxi' else 1.0
+                    )
+                    db.add(conn)
+                    connections_count += 1
+
+    db.commit()
+    print(f"✅ {connections_count} Conexiones generadas exitosamente.")
+
+    # ---------------------------------------------------
+    # 4. CREAR USUARIO DEMO
+    # ---------------------------------------------------
+    user_email = "demo@tripwise.com"
+    existing_user = db.query(User).filter(User.email == user_email).first()
+    
+    if not existing_user:
+        user = User(
+            email=user_email,
+            password=get_password_hash("demo123"),
+            full_name="Viajero Demo",
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+        # Crear perfil vacío para que pruebe el formulario o uno lleno
+        # Vamos a dejarlo sin perfil para que pruebe el flujo de creación
+        print(f"👤 Usuario creado: {user_email} / demo123")
+    else:
+        print("👤 Usuario demo ya existe")
+
+    db.close()
+    print("🏁 SEED COMPLETADO: Tu sistema está listo para demos.")
 
 if __name__ == "__main__":
-    main()
+    seed()

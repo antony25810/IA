@@ -1,7 +1,7 @@
 // frontend/src/components/RouteTimeline.tsx
 import React from 'react';
 import { RouteSegment, AttractionInRoute } from '../services/routerService';
-import './RouteTimeline.css';
+import '../app/styles/RouteTimeline.css';
 
 interface RouteTimelineProps {
     attractions: AttractionInRoute[];

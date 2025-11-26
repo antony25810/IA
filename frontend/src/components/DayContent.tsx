@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { ItineraryDay } from '../services/itinerary';
 import { getAttractionDetails } from '../services/itinerary';
 import RouteTimeline from './RouteTimeline';
-import './DayContent.css';
+import '../app/styles/DayContent.css';
 
 const RouteMapView = dynamic(() => import('./RouteMapView'), {
     ssr: false,
@@ -163,11 +163,17 @@ const DayContent: React. FC<DayContentProps> = ({ day }) => {
             {/* Mapa */}
             <div className="day-map-section">
                 <h3>📍 Mapa del Día</h3>
-                <RouteMapView
-                    attractions={mapData.attractions}
-                    segments={mapData.segments}
-                    height="500px"
-                />
+                {mapData.attractions.length > 0 ? (
+                    <RouteMapView
+                        attractions={mapData.attractions}
+                        segments={mapData.segments}
+                        height="500px"
+                    />
+                ) : (
+                    <p style={{textAlign: 'center', padding: '20px', background: '#f5f5f5', borderRadius: '8px'}}>
+                        No hay ruta para mostrar en este día.
+                    </p>
+                )}
             </div>
 
             {/* Timeline */}

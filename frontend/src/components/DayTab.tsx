@@ -1,6 +1,6 @@
 // frontend/src/components/DayTab.tsx
 import React from 'react';
-import './DayTab.css';
+import '../app/styles/DayTab.css';
 
 interface DayTabProps {
     dayNumber: number;

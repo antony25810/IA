@@ -1,52 +1,34 @@
 # backend/services/search_service/bfs_algorithm.py
-"""
-Implementación del algoritmo BFS (Breadth-First Search)
-Para exploración de atracciones turísticas
-"""
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Set, Optional
 from collections import deque
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
-from shared.database.models import Attraction, AttractionConnection
+from shared.database.models import Attraction
 from shared.utils.logger import setup_logger
+from shared.graph_loader import GraphDataManager 
 
 logger = setup_logger(__name__)
 
-
 @dataclass
 class BFSNode:
-    """Nodo en el grafo BFS"""
     attraction_id: int
-    depth: int  # Nivel en el árbol BFS
-    distance_from_start: float  # Distancia acumulada en metros
-    time_from_start: int  # Tiempo acumulado en minutos
-    parent_id: Optional[int] = None  # Atracción padre en el camino
-
+    depth: int
+    distance_from_start: float
+    time_from_start: int
+    parent_id: Optional[int] = None
 
 @dataclass
 class BFSResult:
-    """Resultado de la exploración BFS"""
-    candidates: List[Dict]  # Atracciones encontradas
-    explored_count: int  # Total de nodos explorados
-    levels_explored: int  # Niveles de profundidad explorados
-    graph_structure: Dict[int, List[int]]  # Estructura del grafo explorado
+    candidates: List[Dict]
+    explored_count: int
+    levels_explored: int
+    graph_structure: Dict[int, List[int]]
     start_attraction_id: int
 
-
 class BFSAlgorithm:
-    """
-    Implementación del algoritmo Breadth-First Search
-    para exploración de atracciones turísticas
-    """
     
     def __init__(self, db: Session):
-        """
-        Inicializar BFS
-        
-        Args:
-            db: Sesión de base de datos
-        """
         self.db = db
         self.visited: Set[int] = set()
         self.graph_structure: Dict[int, List[int]] = {}
@@ -63,42 +45,23 @@ class BFSAlgorithm:
         price_range_filter: Optional[List[str]] = None,
         transport_mode: Optional[str] = None
     ) -> BFSResult:
-        """
-        Explorar atracciones usando BFS desde un punto inicial
         
-        Args:
-            start_attraction_id: ID de la atracción de inicio
-            max_radius_meters: Radio máximo de búsqueda en metros
-            max_time_minutes: Tiempo máximo de viaje acumulado
-            max_candidates: Número máximo de candidatos a retornar
-            max_depth: Profundidad máxima del árbol BFS
-            category_filter: Filtrar por categorías específicas
-            min_rating: Rating mínimo requerido
-            price_range_filter: Filtrar por rangos de precio
-            transport_mode: Modo de transporte preferido
-            
-        Returns:
-            BFSResult: Resultado de la exploración
-        """
-        logger.info(
-            f"Iniciando BFS desde atracción {start_attraction_id} "
-            f"(radio: {max_radius_meters}m, tiempo: {max_time_minutes}min)"
-        )
+        logger.info(f"🚀 BFS: Iniciando desde ID {start_attraction_id}")
         
-        # Verificar que la atracción de inicio existe
-        start_attraction = self.db.query(Attraction).filter(
-            Attraction.id == start_attraction_id
-        ).first()
-        
-        if not start_attraction:
+        # 1. Obtener nodo de inicio para saber el destino y cargar el grafo
+        start_node_db = self.db.query(Attraction).filter(Attraction.id == start_attraction_id).first()
+        if not start_node_db:
             raise ValueError(f"Atracción de inicio {start_attraction_id} no encontrada")
+        
+        # 2. CARGAR EL GRAFO EN MEMORIA (Optimización N+1)
+        # Esto usa el código que ya comprobaste que carga 1736 conexiones
+        graph = GraphDataManager(self.db, start_node_db.destination_id)
         
         # Inicializar estructuras
         self.visited = set()
         self.graph_structure = {}
         candidates = []
         
-        # Cola BFS: (nodo, distancia_acumulada, tiempo_acumulado)
         queue = deque([
             BFSNode(
                 attraction_id=start_attraction_id,
@@ -112,109 +75,79 @@ class BFSAlgorithm:
         explored_count = 0
         max_level_reached = 0
         
-        # ALGORITMO BFS
+        # 3. BUCLE PRINCIPAL
         while queue and len(candidates) < max_candidates:
             current_node = queue.popleft()
             
-            # Verificar si ya visitamos este nodo
             if current_node.attraction_id in self.visited:
                 continue
             
-            # Verificar profundidad máxima
             if current_node.depth > max_depth:
                 continue
             
-            # Marcar como visitado
             self.visited.add(current_node.attraction_id)
             explored_count += 1
             max_level_reached = max(max_level_reached, current_node.depth)
             
-            # Obtener información de la atracción actual
-            current_attraction = self.db.query(Attraction).filter(
-                Attraction.id == current_node.attraction_id
-            ).first()
+            # --- AQUI ESTABA EL POSIBLE ERROR ---
+            # Obtenemos datos del DICCIONARIO en RAM, no de la DB
+            node_data = graph.get_node(current_node.attraction_id)
             
-            if not current_attraction:
+            if not node_data:
+                logger.warning(f"⚠️ Nodo {current_node.attraction_id} no encontrado en RAM")
                 continue
             
-            # Verificar restricciones
-            if not self._meets_criteria(
-                current_attraction,
-                category_filter,
-                min_rating,
-                price_range_filter
-            ):
-                logger.debug(f"Atracción {current_attraction.name} no cumple criterios")
-                continue
-            
-            # Agregar a candidatos (excepto el punto de inicio)
+            # Validar filtros (usando la función adaptada a diccionarios)
+            # El nodo inicial (depth 0) no se agrega a candidatos, solo sus vecinos
             if current_node.depth > 0:
-                candidates.append({
-                    'attraction': current_attraction,
-                    'depth': current_node.depth,
-                    'distance_from_start': round(current_node.distance_from_start, 2),
-                    'time_from_start': current_node.time_from_start,
-                    'parent_id': current_node.parent_id
-                })
-                
-                logger.debug(
-                    f"Candidato agregado: {current_attraction.name} "
-                    f"(depth={current_node.depth}, distance={current_node.distance_from_start:.0f}m)"
-                )
+                if self._meets_criteria_dict(node_data, category_filter, min_rating, price_range_filter):
+                    candidates.append({
+                        'attraction': node_data, # Pasamos el dict, el servicio luego lo maneja
+                        'depth': current_node.depth,
+                        'distance_from_start': round(current_node.distance_from_start, 2),
+                        'time_from_start': current_node.time_from_start,
+                        'parent_id': current_node.parent_id
+                    })
+                    # logger.info(f"✅ Candidato aceptado: {node_data['name']}")
+                else:
+                    # Debug para ver por qué rechaza
+                    # logger.debug(f"❌ {node_data['name']} rechazado por filtros")
+                    pass
+
+            # 4. OBTENER VECINOS (Desde RAM)
+            neighbors = graph.get_neighbors(current_node.attraction_id)
             
-            # Obtener vecinos (conexiones salientes)
-            neighbors = self._get_neighbors(
-                current_node.attraction_id,
-                transport_mode
-            )
+            # Guardar estructura para debug
+            self.graph_structure[current_node.attraction_id] = [n['to_attraction_id'] for n in neighbors]
             
-            # Agregar vecinos a la estructura del grafo
-            self.graph_structure[current_node.attraction_id] = [
-                n['to_attraction_id'] for n in neighbors
-            ]
-            
-            # Agregar vecinos no visitados a la cola
             for neighbor in neighbors:
                 neighbor_id = neighbor['to_attraction_id']
                 
-                # Saltar si ya fue visitado
+                # Filtrar por modo de transporte si se pide
+                if transport_mode and neighbor['transport_mode'] != transport_mode:
+                    continue
+
                 if neighbor_id in self.visited:
                     continue
                 
-                # Calcular distancia y tiempo acumulados
                 new_distance = current_node.distance_from_start + neighbor['distance_meters']
                 new_time = current_node.time_from_start + neighbor['travel_time_minutes']
                 
-                # Verificar límites de radio y tiempo
                 if new_distance > max_radius_meters:
-                    logger.debug(
-                        f"Vecino {neighbor_id} excede radio máximo "
-                        f"({new_distance:.0f}m > {max_radius_meters}m)"
-                    )
                     continue
                 
                 if new_time > max_time_minutes:
-                    logger.debug(
-                        f"Vecino {neighbor_id} excede tiempo máximo "
-                        f"({new_time}min > {max_time_minutes}min)"
-                    )
                     continue
                 
-                # Agregar a la cola
-                queue.append(
-                    BFSNode(
-                        attraction_id=neighbor_id,
-                        depth=current_node.depth + 1,
-                        distance_from_start=new_distance,
-                        time_from_start=new_time,
-                        parent_id=current_node.attraction_id
-                    )
-                )
-        
-        logger.info(
-            f"BFS completado: {len(candidates)} candidatos encontrados, "
-            f"{explored_count} nodos explorados, {max_level_reached} niveles"
-        )
+                queue.append(BFSNode(
+                    attraction_id=neighbor_id,
+                    depth=current_node.depth + 1,
+                    distance_from_start=new_distance,
+                    time_from_start=new_time,
+                    parent_id=current_node.attraction_id
+                ))
+                
+        logger.info(f"🏁 BFS Fin: {len(candidates)} candidatos, {explored_count} explorados")
         
         return BFSResult(
             candidates=candidates,
@@ -223,79 +156,36 @@ class BFSAlgorithm:
             graph_structure=self.graph_structure,
             start_attraction_id=start_attraction_id
         )
-    
-    def _get_neighbors(
+
+    def _meets_criteria_dict(
         self,
-        attraction_id: int,
-        transport_mode: Optional[str] = None
-    ) -> List[Dict]:
-        """
-        Obtener vecinos (conexiones) de una atracción
-        
-        Args:
-            attraction_id: ID de la atracción
-            transport_mode: Filtrar por modo de transporte
-            
-        Returns:
-            List[Dict]: Lista de vecinos con información de conexión
-        """
-        query = self.db.query(AttractionConnection).filter(
-            AttractionConnection.from_attraction_id == attraction_id
-        )
-        
-        if transport_mode:
-            query = query.filter(
-                AttractionConnection.transport_mode == transport_mode.lower()
-            )
-        
-        connections = query.all()
-        
-        neighbors = []
-        for conn in connections:
-            neighbors.append({
-                'to_attraction_id': conn.to_attraction_id,
-                'distance_meters': float(conn.distance_meters),
-                'travel_time_minutes': conn.travel_time_minutes,
-                'transport_mode': conn.transport_mode,
-                'cost': float(conn.cost) if conn.cost else 0.0
-            })
-        
-        return neighbors
-    
-    def _meets_criteria(
-        self,
-        attraction: Attraction,
+        attr_data: Dict,
         category_filter: Optional[List[str]],
         min_rating: Optional[float],
         price_range_filter: Optional[List[str]]
     ) -> bool:
         """
-        Verificar si una atracción cumple con los criterios de filtrado
-        
-        Args:
-            attraction: Atracción a verificar
-            category_filter: Categorías permitidas
-            min_rating: Rating mínimo
-            price_range_filter: Rangos de precio permitidos
-            
-        Returns:
-            bool: True si cumple todos los criterios
+        Verifica criterios usando el DICCIONARIO de memoria (no objeto SQLAlchemy)
         """
-        # Filtro por categoría
+        # 1. Filtro Categoría
         if category_filter:
-            if attraction.category not in [c.lower() for c in category_filter]:
+            # Normalizar a minúsculas para comparar
+            cat = (attr_data.get('category') or '').lower()
+            if cat not in [c.lower() for c in category_filter]:
                 return False
         
-        # Filtro por rating
+        # 2. Filtro Rating
         if min_rating is not None:
-            if attraction.rating is None or attraction.rating < min_rating:
+            rating = attr_data.get('rating')
+            if rating is None or rating < min_rating:
                 return False
         
-        # Filtro por rango de precio
+        # 3. Filtro Precio
         if price_range_filter:
-            if attraction.price_range not in [p.lower() for p in price_range_filter]:
+            price = (attr_data.get('price_range') or '').lower()
+            if price not in [p.lower() for p in price_range_filter]:
                 return False
-        
+                
         return True
     
     def reconstruct_path(

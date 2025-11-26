@@ -6,6 +6,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import func, cast
 from geoalchemy2 import Geography # type: ignore
+from math import radians, cos, sin, asin, sqrt
 
 from shared.database.models import Attraction
 from shared.utils.logger import setup_logger
@@ -17,36 +18,24 @@ class Heuristics:
     """Colección de funciones heurísticas para A*"""
     
     @staticmethod
-    def euclidean_distance(
-        db: Session,
-        from_attraction: Attraction,
-        to_attraction: Attraction
-    ) -> float:
+    def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
-        Distancia euclidiana (línea recta) entre dos atracciones
-        Usa PostGIS para cálculo geográfico real
-        
-        Args:
-            db: Sesión de base de datos
-            from_attraction: Atracción origen
-            to_attraction: Atracción destino
-            
-        Returns:
-            float: Distancia en metros
+        Calcula distancia en metros usando fórmula Haversine (Python puro).
+        Reemplaza a ST_Distance de PostGIS para velocidad en bucles.
         """
-        try:
-            distance = db.query(
-                func.ST_Distance(
-                    cast(from_attraction.location, Geography),
-                    cast(to_attraction.location, Geography)
-                )
-            ).scalar()
-            
-            return float(distance) if distance else 0.0
-            
-        except Exception as e:
-            logger.warning(f"Error calculando distancia euclidiana: {str(e)}")
+        if None in [lat1, lon1, lat2, lon2]:
             return 0.0
+
+        # Radio de la tierra en metros
+        R = 6371000 
+        
+        dLat = radians(lat2 - lat1)
+        dLon = radians(lon2 - lon1)
+        
+        a = sin(dLat / 2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dLon / 2)**2
+        c = 2 * asin(sqrt(a))
+        
+        return R * c
     
     @staticmethod
     def manhattan_distance(

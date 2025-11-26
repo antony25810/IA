@@ -1,199 +1,199 @@
 'use client';
 import React, { useState, useEffect } from "react";
 import Link from 'next/link';
-import { getDestinations, getTopAttractions, getDestinationStats } from '../../services/destinationService';
+import dynamic from 'next/dynamic';
+import { useAuth } from '../../context/AuthContext';
+import { getDestinations, getTopAttractions } from '../../services/destinationService';
+import { getUserProfileByUserId } from '../../services/profileService';
+import { getRulesRecommendations, buildCurrentContext } from '../../services/ruleService';
 import { Destination, Attraction } from '../../types';
 import '../styles/destino.css';
 
+// ✅ Carga dinámica del mapa para evitar errores de ventana (SSR)
+const MapView = dynamic(() => import('../../components/MapView'), {
+    ssr: false,
+    loading: () => <div style={{ height: '400px', background: '#e0e0e0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Cargando mapa...</div>
+});
+
 const DestinosViaje: React.FC = () => {
+  const { user } = useAuth();
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [selectedDest, setSelectedDest] = useState<Destination | null>(null);
   const [destAttractions, setDestAttractions] = useState<Attraction[]>([]);
+  const [aiRecommendations, setAiRecommendations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProfileId, setUserProfileId] = useState<number | null>(null);
 
-  // Cargar destinos al iniciar
+  // Cargar destinos y perfil
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
         const data = await getDestinations();
         setDestinations(data);
-        if (data.length > 0) {
-          handleSelectDestination(data[0]);
+        
+        if (user?.id) {
+          try {
+            const profile = await getUserProfileByUserId(user.id);
+            setUserProfileId(profile.id!);
+          } catch (e) {
+            console.log("Usuario sin perfil aún");
+          }
         }
+        
+        if (data.length > 0) handleSelectDestination(data[0]);
       } catch (err) {
-        console.error("Error cargando destinos", err);
+        console.error("Error inicial", err);
       } finally {
         setLoading(false);
       }
     };
     fetchInitialData();
-  }, []);
+  }, [user]);
 
-  // Manejar selección de destino
+  // Selección de destino
   const handleSelectDestination = async (dest: Destination) => {
     setSelectedDest(dest);
-    // Cargar atracciones específicas para este destino
-    const attrs = await getTopAttractions(dest.id);
-    setDestAttractions(attrs);
-  };
-
-  // Función auxiliar para parsear coordenadas WKT "POINT(-77.04 -12.04)" a lat/lon
-  const getCoordinates = (wkt: string) => {
+    setAiRecommendations([]); // Limpiar anteriores
+    
     try {
-      const clean = wkt.replace('POINT(', '').replace(')', '');
-      const [lon, lat] = clean.split(' ');
-      return { lat, lon };
-    } catch (e) {
-      return { lat: '0', lon: '0' }; // Fallback
+      // 1. Atracciones
+      const attrs = await getTopAttractions(dest.id);
+      setDestAttractions(attrs);
+      
+      // 2. IA Recomendaciones
+      if (userProfileId) {
+        const context = buildCurrentContext({
+          location: { city: dest.name, country: dest.country }
+        });
+        const recs = await getRulesRecommendations(userProfileId, context);
+        setAiRecommendations(recs.recommendations || []);
+      }
+    } catch (err) {
+      console.error("Error cargando detalles", err);
     }
   };
 
+  // Helper de coordenadas
+  const getCoordinates = (wkt: string | any) => {
+    if (!wkt || typeof wkt !== 'string') {
+        // Coordenadas por defecto de CDMX si falla (para que no salga el mar)
+        return { lat: 19.4326, lon: -99.1332 }; 
+    }
+    
+    try {
+      const clean = wkt.replace('POINT(', '').replace(')', '').trim();
+      const [lonStr, latStr] = clean.split(/\s+/);
+      
+      const lon = parseFloat(lonStr);
+      const lat = parseFloat(latStr);
+
+      if (isNaN(lat) || isNaN(lon)) {
+        throw new Error("NaN coordinates");
+      }
+
+      return { lat, lon };
+    } catch {
+      console.warn("Error parseando coordenadas:", wkt);
+        // Fallback a CDMX (Zócalo) en lugar de 0,0
+      return { lat: 19.4326, lon: -99.1332 };
+    }
+  };
+
+  // Preparar marcadores para el mapa
+  const mapMarkers = destAttractions.map(attr => {
+    const coords = getCoordinates(attr.location);
+    return {
+        id: attr.id,
+        name: attr.name,
+        lat: coords.lat,
+        lon: coords.lon,
+        category: attr.category,
+        score: attr.rating ? attr.rating * 20 : undefined // Score simulado para color
+    };
+  });
+
   return (
-    <div>
-      {/* HEADER */}
+    <div style={{minHeight: '100vh', display: 'flex', flexDirection: 'column'}}>
       <header>
-        <h1>RUTAS INTELIGENCIA ARTIFICIAL</h1>
+        <h1>TRIPWISE AI</h1>
         <nav>
           <Link href="/">Inicio</Link>
           <Link href="/Destino">Destinos</Link>
-          <Link href="/Sesion">Perfil</Link>
-          <Link href="/Contacto">Contacto</Link>
+          <Link href="/profile">Perfil</Link>
         </nav>
-        <div className="user-icon"></div>
+        <div className="user-icon">👤</div>
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
       <section className="container">
-        
-        {/* Lado izquierdo: Lista de Destinos (Dinámica) */}
+        {/* IZQUIERDA: Lista */}
         <div className="categorias">
-          {loading ? (
-            <p>Cargando destinos...</p>
-          ) : (
-            destinations.map((dest) => (
-              <div 
-                key={dest.id} 
-                className="tarjeta" 
-                onClick={() => handleSelectDestination(dest)}
-                style={{ 
-                  cursor: 'pointer',
-                  border: selectedDest?.id === dest.id ? '2px solid #004a8f' : 'none' 
-                }}
-              >
-                {/* Imagen placeholder basada en ID para variedad */}
-                <img 
-                  src={`https://source.unsplash.com/800x600/?${dest.name},travel`} 
-                  alt={dest.name}
-                  onError={(e) => e.currentTarget.src = 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee'} 
-                />
-                <div className="tarjeta-content">
-                  <h3>{dest.name}</h3>
-                  <p className="text-sm text-gray-500">{dest.country}</p>
-                  <p style={{marginTop: 5}}>
-                    {dest.description?.substring(0, 60)}...
-                  </p>
-                </div>
+          {loading ? <p>Cargando...</p> : destinations.map((dest) => (
+            <div 
+              key={dest.id} 
+              className="tarjeta" 
+              onClick={() => handleSelectDestination(dest)}
+              style={{ border: selectedDest?.id === dest.id ? '2px solid #004a8f' : 'none' }}
+            >
+              <img 
+                src={`https://source.unsplash.com/800x600/?${dest.name},landmark`} 
+                alt={dest.name}
+                onError={(e) => e.currentTarget.src = 'https://via.placeholder.com/800x600?text=No+Image'} 
+              />
+              <div className="tarjeta-content">
+                <h3>{dest.name}</h3>
+                <p>{dest.country}</p>
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
 
-        {/* Lado derecho: Detalles del Destino Seleccionado */}
+        {/* DERECHA: Detalles */}
         <div className="contenido">
           {selectedDest ? (
             <>
-              <h1>Explora: {selectedDest.name}</h1>
-              <h4 style={{color: '#004a8f', marginTop: -5, marginBottom: 15}}>
-                {selectedDest.state ? `${selectedDest.state}, ` : ''}{selectedDest.country}
-              </h4>
-              
-              <p>{selectedDest.description || "Descubre las maravillas de este destino turístico."}</p>
-              
-              {/* Mapa Dinámico (Google Maps Embed simple) */}
-              {(() => {
-                const coords = getCoordinates(selectedDest.location);
-                return (
-                  <iframe
-                    width="100%"
-                    height="400"
-                    style={{ border: 0, borderRadius: 10, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}
-                    loading="lazy"
-                    allowFullScreen
-                    src={`https://maps.google.com/maps?q=${coords.lat},${coords.lon}&z=12&output=embed`}
-                  ></iframe>
-                );
-              })()}
+              <h1>{selectedDest.name}</h1>
+              <p>{selectedDest.description}</p>
 
-              {/* Sección de Atracciones Populares */}
-              <div style={{ marginTop: 30 }}>
-                <h3 style={{ color: '#004a8f' }}>Atracciones Principales en {selectedDest.name}</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 15, marginTop: 15 }}>
-                  {destAttractions.length > 0 ? (
-                    destAttractions.map(attr => (
-                      <div key={attr.id} style={{ background: '#f8f9fb', padding: 10, borderRadius: 8 }}>
-                        <h4 style={{ margin: '0 0 5px 0', fontSize: 15 }}>{attr.name}</h4>
-                        <span style={{ fontSize: 12, background: '#e2e6ea', padding: '2px 6px', borderRadius: 4 }}>
-                          {attr.category}
-                        </span>
-                        <p style={{ fontSize: 13, margin: '5px 0 0 0', color: '#555' }}>
-                          {attr.price_range ? `Precio: ${attr.price_range}` : 'Precio variado'}
-                        </p>
-                      </div>
-                    ))
-                  ) : (
-                    <p>No hay atracciones registradas aún.</p>
-                  )}
-                </div>
+              <div style={{ marginTop: 20, marginBottom: 20 }}>
+                 <MapView 
+                    center={getCoordinates(selectedDest.location)}
+                    markers={mapMarkers}
+                    height="350px"
+                 />
               </div>
-              
-              <div style={{ marginTop: 20 }}>
-                <button 
-                  style={{
-                    background: '#004a8f', 
-                    color: 'white', 
-                    padding: '12px 20px', 
-                    border: 'none', 
-                    borderRadius: 8, 
-                    cursor: 'pointer', 
-                    fontSize: 16
-                  }}
+
+              {/* IA Recomendaciones */}
+              {aiRecommendations.length > 0 && (
+                <div className="info-box" style={{background: '#e3f2fd', borderLeft: '4px solid #2196f3'}}>
+                    <h4 style={{margin: 0}}>🤖 TripWise IA Sugiere:</h4>
+                    <ul style={{margin: '10px 0 0 20px'}}>
+                        {aiRecommendations.slice(0, 3).map((rec, i) => (
+                            <li key={i}>{rec.suggestion}</li>
+                        ))}
+                    </ul>
+                </div>
+              )}
+
+              {/* BOTÓN PLANEAR */}
+              <div style={{ marginTop: 30 }}>
+                <Link 
+                  href={`/planner/${selectedDest.id}`}
+                  className="btn-primary"
+                  style={{ textDecoration: 'none', display: 'inline-block', textAlign: 'center' }}
                 >
-                  Planear viaje a {selectedDest.name}
-                </button>
+                  🚀 Planear viaje a {selectedDest.name}
+                </Link>
               </div>
             </>
           ) : (
-            <div style={{ textAlign: 'center', marginTop: 50 }}>
-              <h2>Selecciona un destino para ver detalles</h2>
-              <p>Explora nuestra base de datos de lugares increíbles.</p>
-            </div>
+            <p>Selecciona un destino para comenzar.</p>
           )}
         </div>
       </section>
-
-      <section className="beneficios">
-        <div className="beneficio">
-          <h3>🌎 IA Inteligente</h3>
-          <p>Análisis de datos en tiempo real de {destinations.length} destinos disponibles.</p>
-        </div>
-        <div className="beneficio">
-          <h3>🕒 Optimización</h3>
-          <p>Algoritmos A* y BFS para calcular las rutas más eficientes.</p>
-        </div>
-        <div className="beneficio">
-          <h3>💰 Presupuesto</h3>
-          <p>Filtra atracciones según tu rango de precios preferido.</p>
-        </div>
-      </section>
-
-      {/* FRASE MOTIVACIONAL */}
-      <section className="frase">
-        <p>“Cada destino tiene una historia, y la tuya apenas comienza.”</p>
-      </section>
-
-      {/* FOOTER */}
-      <footer>
-        <p>© 2025 Rutas Inteligencia Artificial | Todos los derechos reservados</p>
+      
+      {/* Footer simple para rellenar espacio */}
+      <footer style={{marginTop: 'auto'}}>
+          <p>© 2025 TripWise AI</p>
       </footer>
     </div>
   );

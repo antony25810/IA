@@ -177,6 +177,26 @@ TRANSPORT_BASE_TIMES: Dict[str, float] = {
     'metro': 8.0
 }
 
+SCORING_WEIGHTS = {
+    # Coincidencias de categoría
+    'priority_category': 30.0,    # Categoría prioritaria (ej: Museo en perfil cultural)
+    'recommended_category': 15.0, # Categoría recomendada
+    'avoid_category': -50.0,      # Categoría a evitar
+    
+    # Restricciones
+    'price_mismatch': -100.0,     # Precio fuera de rango
+    'rating_below_min': -50.0,    # Rating muy bajo
+    'missing_amenity': -40.0,     # Falta algo crítico (ej: rampa silla ruedas)
+    
+    # Base
+    'rating_multiplier': 10.0,    # Rating 4.5 * 10 = 45 puntos
+    
+    # Penalización por distancia (BFS)
+    'distance_penalty_per_km': 1.0 # -1 punto por cada km de distancia del centro
+}
+
+DEFAULT_VISIT_DURATION = 60
+
 
 # ============================================================================
 # CONFIGURACIÓN DE ALGORITMOS

@@ -208,14 +208,15 @@ export const getRulesRecommendations = async (
     const response = await fetch(
         `${API_URL}/api/rules/recommendations/${userProfileId}`,
         {
-            method: 'GET', // Aunque el router dice GET, acepta Body (usar POST si falla)
+            method: 'POST', // Aunque el router dice GET, acepta Body (usar POST si falla)
             headers: getAuthHeaders(),
             body: context ? JSON.stringify(context) : undefined
         }
     );
 
     if (!response.ok) {
-        throw new Error('Error obteniendo recomendaciones');
+        console.warn("No se pudieron cargar recomendaciones de IA");
+        return { recommendations: [] };
     }
 
     return await response. json();
