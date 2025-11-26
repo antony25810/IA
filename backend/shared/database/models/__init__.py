@@ -6,7 +6,7 @@ from .destination import Destination
 from .attraction import Attraction
 from .connection import AttractionConnection
 from .user_profile import UserProfile
-from .itinerary import Itinerary, ItineraryAttraction
+from .itinerary import Itinerary, ItineraryAttraction, ItineraryDay
 from .review import Review, AttractionRating
 from .user import User
 
@@ -17,6 +17,7 @@ __all__ = [
     "UserProfile",
     "Itinerary",
     "ItineraryAttraction",
+    "ItineraryDay",
     "Review",
     "AttractionRating", 
     "User"

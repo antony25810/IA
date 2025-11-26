@@ -1,4 +1,4 @@
-# backend/services/user_profiles/__init__.py
+# backend/services/user_profile/__init__.py
 """
 Módulo de servicios para gestión de perfiles de usuario
 """

@@ -114,7 +114,7 @@ class Attraction(Base):
             "popularity_score": float(self.popularity_score) if self.popularity_score else None, # type: ignore
             "verified": self.verified,
             "accessibility": self.accessibility,
-            "metadata": self.metadata,
+            "extra_data": self.extra_data,
             "images": self.images,
             "created_at": self.created_at.isoformat() if self.created_at else None, # type: ignore
             "updated_at": self.updated_at.isoformat() if self.updated_at else None, # type: ignore

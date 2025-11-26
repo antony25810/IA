@@ -10,6 +10,11 @@ from .bfs_algorithm import BFSAlgorithm, BFSResult
 from shared.database.models import Attraction, UserProfile
 from shared.schemas.attraction import AttractionRead
 from shared.utils.logger import setup_logger
+from shared.config.constants import(
+    get_categories_from_interests,
+    get_budget_limits,
+    MOBILITY_CONSTRAINTS
+)
 
 logger = setup_logger(__name__)
 

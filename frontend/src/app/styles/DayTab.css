@@ -1,0 +1,42 @@
+/* frontend/src/components/DayTab.css */
+
+.day-tab {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-align: center;
+    min-width: 150px;
+}
+
+.day-tab:hover {
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.2);
+}
+
+.day-tab.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    color: white;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.day-tab-number {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.day-tab-date {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.day-tab-count {
+    font-size: 0.85rem;
+    margin-top: 5px;
+    opacity: 0.8;
+}

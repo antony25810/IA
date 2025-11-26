@@ -1,9 +1,8 @@
-// src/app/Sesion/page.tsx
 'use client';
 import React, { useState } from "react";
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
-import { loginUser, registerUser } from '../../services/authService';
+import { loginUser, registerUser, AuthResponse } from '../../services/authService';
 import { useRouter } from 'next/navigation';
 import '../styles/session.css';
 
@@ -22,14 +21,41 @@ const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      let data;
+      let authData: AuthResponse;
+      
       if (isRegister) {
-        data = await registerUser(formData);
+        // ✅ Validar que el nombre esté presente
+        if (!formData.name || ! formData.email || !formData.password) {
+          throw new Error('Todos los campos son obligatorios');
+        }
+        authData = await registerUser({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password
+        });
       } else {
-        data = await loginUser({ email: formData.email, password: formData.password });
+        // ✅ Login
+        authData = await loginUser({
+          email: formData. email,
+          password: formData.password
+        });
       }
-      login(data.access_token, { id: data.user_id, name: data.name });
-      router.push('/Destino'); // Redirigir a planificador
+
+      // ✅ Pasar datos completos al contexto
+      login(authData. access_token, {
+        id: authData.user_id,
+        name: authData.name,
+        email: authData.email,
+        user_profile_id: authData. user_profile_id
+      });
+
+      // ✅ Redirigir según tenga perfil completo o no
+      if (authData. user_profile_id) {
+        router.push('/Destino');
+      } else {
+        router.push('/profile'); // Completar perfil
+      }
+
     } catch (err: any) {
       setError(err.message || 'Error de autenticación');
     } finally {
@@ -59,8 +85,15 @@ const Login: React.FC = () => {
           </p>
 
           {error && (
-            <div style={{ color: 'red', marginBottom: 15, fontSize: '0.9em' }}>
-              {error}
+            <div style={{ 
+              color: 'white', 
+              background: '#ff6b6b', 
+              padding: '10px 15px',
+              borderRadius: 8,
+              marginBottom: 15, 
+              fontSize: '0.9em' 
+            }}>
+              ⚠️ {error}
             </div>
           )}
 
@@ -73,7 +106,7 @@ const Login: React.FC = () => {
                   placeholder="Tu nombre" 
                   required 
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({... formData, name: e.target.value})}
                 />
               </div>
             )}
@@ -84,7 +117,7 @@ const Login: React.FC = () => {
                 type="email" 
                 placeholder="ejemplo@correo.com" 
                 required 
-                value={formData.email}
+                value={formData. email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
               />
             </div>
@@ -95,24 +128,38 @@ const Login: React.FC = () => {
                 type="password" 
                 placeholder="••••••••" 
                 required 
+                minLength={6}
                 value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                onChange={(e) => setFormData({...formData, password: e. target.value})}
               />
+              {isRegister && (
+                <small style={{ fontSize: '0.8em', color: '#666', marginTop: 5 }}>
+                  Mínimo 6 caracteres
+                </small>
+              )}
             </div>
 
-            <button className="btn-login" disabled={loading}>
-              {loading ? 'Cargando...' : (isRegister ? 'Registrarse' : 'Entrar')}
+            <button className="btn-login" disabled={loading} type="submit">
+              {loading ? 'Procesando...' : (isRegister ? 'Crear Cuenta' : 'Iniciar Sesión')}
             </button>
 
             <div className="extra-links">
-              {!isRegister && (
+              {! isRegister && (
                 <div style={{marginBottom: 10}}>
                   <a href="#">¿Olvidaste tu contraseña?</a>
                 </div>
               )}
               <div>
-                {isRegister ? '¿Ya tienes cuenta? ' : '¿No tienes cuenta? '}
-                <a href="#" onClick={(e) => { e.preventDefault(); setIsRegister(!isRegister); setError(''); }}>
+                {isRegister ? '¿Ya tienes cuenta?  ' : '¿No tienes cuenta? '}
+                <a 
+                  href="#" 
+                  onClick={(e) => { 
+                    e.preventDefault(); 
+                    setIsRegister(!isRegister); 
+                    setError('');
+                    setFormData({ email: '', password: '', name: '' });
+                  }}
+                >
                   {isRegister ? 'Inicia Sesión' : 'Regístrate aquí'}
                 </a>
               </div>

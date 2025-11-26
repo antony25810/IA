@@ -54,7 +54,6 @@ class RulesEngineService:
             profile_dict = {
                 'user_id': str(user_profile.user_id),
                 'name': user_profile.name,
-                'email': user_profile.email,
                 'preferences': user_profile.preferences or {},
                 'budget_range': user_profile.budget_range,
                 'budget_min': user_profile.budget_min,

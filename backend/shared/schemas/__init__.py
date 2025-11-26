@@ -50,13 +50,22 @@ from .user_profile import (
 )
 
 from .itinerary import (
+    AttractionInDay,
+    RouteSegment,
+    DaySummary,
+    DayData,
+    ItineraryDayBase,
+    ItineraryDayCreate,
+    ItineraryDayRead,
+    ItineraryDayUpdate,
     ItineraryBase,
-    RouteDataSchema,
     ItineraryCreate,
     ItineraryUpdate,
     ItineraryRead,
+    ItineraryWithDays,
     ItineraryWithDetails,
-    ItinerarySearchParams
+    ItineraryGenerationRequest,
+    ItineraryGenerationResponse,
 )
 
 from .review import (

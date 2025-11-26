@@ -5,10 +5,11 @@ Incluye búsquedas geoespaciales con PostGIS
 """
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import func, and_, or_, cast
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_MakePoint # type: ignore
 from geoalchemy2.elements import WKTElement # type: ignore
 from fastapi import HTTPException, status
+from geoalchemy2 import Geography as GeoType # type: ignore        
 
 from shared.database.models import Attraction, Destination
 from shared.schemas.attraction import (
@@ -235,10 +236,7 @@ class AttractionService:
             
         Returns:
             List[dict]: Lista de atracciones con distancia calculada
-        """
-        from geoalchemy2 import Geography as GeoType # type: ignore
-        from sqlalchemy import cast
-        
+        """        
         # Crear punto de referencia (Geography espera lon, lat)
         reference_point = WKTElement(f'POINT({lon} {lat})', srid=4326)
         

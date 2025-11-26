@@ -1,10 +1,10 @@
 # shared/database/models/itinerary.py
 """
-Modelos para itinerarios generados
+Modelos para itinerarios multi-día (VERSIÓN MEJORADA)
 """
 from sqlalchemy import (
-    Column, Integer, String, DateTime, 
-    Numeric, ForeignKey, func, Index
+    Column, Integer, String, DateTime, Date, Boolean,
+    Numeric, ForeignKey, func, Index, Text
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -13,7 +13,7 @@ from shared.database.base import Base
 
 class Itinerary(Base):
     """
-    Tabla de itinerarios generados por el sistema
+    Tabla principal de itinerarios multi-día
     """
     __tablename__ = "itineraries"
 
@@ -33,100 +33,176 @@ class Itinerary(Base):
         index=True
     )
     
-    # Nombre del itinerario
-    name = Column(String(255))
-    description = Column(String(1000))
+    # Punto de partida/retorno (hotel o centro de ciudad)
+    start_point_id = Column(
+        Integer,
+        ForeignKey("attractions.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="ID de atracción usada como punto de inicio/fin (hotel o centro)"
+    )
     
-    # Datos de la ruta calculada
-    route_data = Column(JSONB, nullable=False)
+    # Metadatos
+    name = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    
+    # Configuración del viaje
+    num_days = Column(Integer, nullable=False, default=1)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # Calculado automáticamente
+    
+    # Parámetros usados para generar (para regenerar si es necesario)
+    generation_params = Column(JSONB, nullable=True)
     # Ejemplo:
     # {
-    #   "sequence": [
-    #     {
-    #       "order": 1,
-    #       "attraction_id": 5,
-    #       "arrival_time": "09:00",
-    #       "departure_time": "10:30",
-    #       "visit_duration": 90
-    #     },
-    #     ...
-    #   ],
-    #   "connections": [
-    #     {
-    #       "from": 5,
-    #       "to": 8,
-    #       "transport": "walking",
-    #       "duration": 15
-    #     },
-    #     ...
-    #   ]
+    #   "optimization_mode": "balanced",
+    #   "max_radius_km": 10.0,
+    #   "max_candidates": 50,
+    #   "bfs_max_depth": 5,
+    #   "transport_mode": null
     # }
     
-    # Métricas del itinerario
-    total_duration = Column(Integer)  # Minutos totales
-    total_cost = Column(Numeric(10, 2))  # Costo total estimado
-    total_distance = Column(Numeric(10, 2))  # Distancia total en metros
+    # Métricas globales (sumatoria de todos los días)
+    total_duration_minutes = Column(Integer, nullable=True)
+    total_cost = Column(Numeric(10, 2), nullable=True)
+    total_distance_meters = Column(Numeric(12, 2), nullable=True)
+    total_attractions = Column(Integer, nullable=True)
     
-    # Puntuación de optimización (calculada por A*)
-    optimization_score = Column(Numeric(5, 2))
+    # Score promedio de optimización
+    average_optimization_score = Column(Numeric(5, 2), nullable=True)
     
-    # Algoritmos utilizados
-    algorithms_used = Column(JSONB)
-    # Ejemplo: {"search": "BFS", "routing": "A*", "ml_model": "neural_network_v1"}
+    # Algoritmos utilizados (metadata técnica)
+    algorithms_used = Column(JSONB, nullable=True)
+    # {"search": "BFS", "routing": "A*", "clustering": "KMeans"}
     
-    # Estado
-    status = Column(String(50), default='draft')
-    # Valores: 'draft', 'confirmed', 'in_progress', 'completed', 'cancelled'
+    # Estado del itinerario
+    status = Column(
+        String(50), 
+        default='draft',
+        nullable=False,
+        comment="draft, confirmed, in_progress, completed, cancelled"
+    )
+    
+    # Indica si fue editado manualmente
+    manually_edited = Column(Boolean, default=False)
     
     # Feedback del usuario
-    user_rating = Column(Integer)  # 1-5
-    user_feedback = Column(String(1000))
+    user_rating = Column(Integer, nullable=True, comment="1-5 estrellas")
+    user_feedback = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Fecha de inicio planificada
-    start_date = Column(DateTime(timezone=True))
-    
     # Relaciones
-    user_profile = relationship("UserProfile", backref="itineraries")
-    destination = relationship("Destination", backref="itineraries")
+    user_profile = relationship("UserProfile", back_populates="itineraries")
+    destination = relationship("Destination", back_populates="itineraries")
+    start_point = relationship("Attraction", foreign_keys=[start_point_id])
+    days = relationship(
+        "ItineraryDay", 
+        back_populates="itinerary", 
+        cascade="all, delete-orphan",
+        order_by="ItineraryDay.day_number"
+    )
+    attraction_visits = relationship(
+        "ItineraryAttraction",
+        back_populates="itinerary",
+        cascade="all, delete-orphan"
+    )
 
     # Índices
     __table_args__ = (
         Index('idx_itinerary_user_date', 'user_profile_id', 'start_date'),
         Index('idx_itinerary_status', 'status'),
+        Index('idx_itinerary_destination', 'destination_id', 'start_date'),
     )
 
     def __repr__(self):
-        return f"<Itinerary(id={self.id}, user={self.user_profile_id}, destination={self.destination_id})>"
+        return f"<Itinerary(id={self.id}, days={self.num_days}, destination={self.destination_id})>"
 
-    def to_dict(self):
-        """Convierte el modelo a diccionario"""
-        return {
-            "id": self.id,
-            "user_profile_id": self.user_profile_id,
-            "destination_id": self.destination_id,
-            "name": self.name,
-            "description": self.description,
-            "route_data": self.route_data,
-            "total_duration": self.total_duration,
-            "total_cost": float(self.total_cost) if self.total_cost else None,
-            "total_distance": float(self.total_distance) if self.total_distance else None,
-            "optimization_score": float(self.optimization_score) if self.optimization_score else None,
-            "algorithms_used": self.algorithms_used,
-            "status": self.status,
-            "user_rating": self.user_rating,
-            "start_date": self.start_date.isoformat() if self.start_date else None,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
+
+class ItineraryDay(Base):
+    """
+    Tabla para días individuales del itinerario
+    Facilita consultas y edición por día
+    """
+    __tablename__ = "itinerary_days"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    itinerary_id = Column(
+        Integer,
+        ForeignKey("itineraries.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    
+    day_number = Column(Integer, nullable=False, comment="1, 2, 3...")
+    date = Column(Date, nullable=False)
+    
+    # ID del cluster (si se usó clustering geográfico)
+    cluster_id = Column(Integer, nullable=True)
+    
+    # Coordenadas del centroide del cluster (para visualización)
+    cluster_centroid_lat = Column(Numeric(10, 7), nullable=True)
+    cluster_centroid_lon = Column(Numeric(10, 7), nullable=True)
+    
+    # Datos estructurados del día (JSONB)
+    day_data = Column(JSONB, nullable=False)
+    # Estructura:
+    # {
+    #   "attractions": [
+    #     {
+    #       "attraction_id": 5,
+    #       "order": 1,
+    #       "arrival_time": "09:00",
+    #       "departure_time": "10:30",
+    #       "visit_duration_minutes": 90,
+    #       "score": 85.5
+    #     }
+    #   ],
+    #   "segments": [
+    #     {
+    #       "from_attraction_id": 55,
+    #       "to_attraction_id": 5,
+    #       "distance_meters": 2300,
+    #       "travel_time_minutes": 15,
+    #       "transport_mode": "walking",
+    #       "cost": 0
+    #     }
+    #   ]
+    # }
+    
+    # Métricas del día
+    total_distance_meters = Column(Numeric(10, 2), nullable=True)
+    total_time_minutes = Column(Integer, nullable=True)
+    total_cost = Column(Numeric(8, 2), nullable=True)
+    attractions_count = Column(Integer, nullable=True)
+    optimization_score = Column(Numeric(5, 2), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relaciones
+    itinerary = relationship("Itinerary", back_populates="days")
+    attractions = relationship(
+        "ItineraryAttraction",
+        back_populates="day",
+        cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index('idx_itinerary_day', 'itinerary_id', 'day_number', unique=True),
+    )
+
+    def __repr__(self):
+        return f"<ItineraryDay(itinerary={self.itinerary_id}, day={self.day_number})>"
 
 
 class ItineraryAttraction(Base):
     """
-    Tabla de relación muchos-a-muchos entre itinerarios y atracciones
-    (opcional, para consultas más eficientes)
+    Tabla de relación muchos-a-muchos
+    Vincula atracciones con itinerarios y días específicos
     """
     __tablename__ = "itinerary_attractions"
 
@@ -138,6 +214,14 @@ class ItineraryAttraction(Base):
         nullable=False,
         index=True
     )
+    
+    day_id = Column(
+        Integer,
+        ForeignKey("itinerary_days.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True
+    )
+    
     attraction_id = Column(
         Integer,
         ForeignKey("attractions.id", ondelete="CASCADE"),
@@ -145,31 +229,41 @@ class ItineraryAttraction(Base):
         index=True
     )
     
-    # Orden en el itinerario
+    # Orden global en todo el itinerario
     visit_order = Column(Integer, nullable=False)
     
+    # Orden dentro del día específico
+    day_order = Column(Integer, nullable=True)
+    
+    # Score asignado por el algoritmo de scoring
+    attraction_score = Column(Numeric(5, 2), nullable=True)
+    
     # Tiempos planificados
-    planned_arrival = Column(DateTime(timezone=True))
-    planned_departure = Column(DateTime(timezone=True))
+    planned_arrival = Column(DateTime(timezone=True), nullable=True)
+    planned_departure = Column(DateTime(timezone=True), nullable=True)
+    visit_duration_minutes = Column(Integer, nullable=True)
     
-    # Tiempos reales (si el usuario lo completa)
-    actual_arrival = Column(DateTime(timezone=True))
-    actual_departure = Column(DateTime(timezone=True))
+    # Tiempos reales (si el usuario completa el viaje)
+    actual_arrival = Column(DateTime(timezone=True), nullable=True)
+    actual_departure = Column(DateTime(timezone=True), nullable=True)
     
-    # Rating específico de esta visita
-    visit_rating = Column(Integer)  # 1-5
-    visit_notes = Column(String(500))
+    # Indica si fue añadido manualmente después de la generación
+    manually_added = Column(Boolean, default=False)
+    
+    # Rating y notas del usuario para esta visita específica
+    visit_rating = Column(Integer, nullable=True, comment="1-5 estrellas")
+    visit_notes = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relaciones
-    itinerary = relationship("Itinerary", backref="attraction_visits")
-    attraction = relationship("Attraction", backref="itinerary_visits")
+    itinerary = relationship("Itinerary", back_populates="attraction_visits")
+    day = relationship("ItineraryDay", back_populates="attractions")
+    attraction = relationship("Attraction")
 
-    # Índices
     __table_args__ = (
-        Index('idx_itinerary_attraction', 'itinerary_id', 'attraction_id', unique=True),
+        Index('idx_itinerary_day_attr', 'itinerary_id', 'day_id', 'attraction_id'),
         Index('idx_visit_order', 'itinerary_id', 'visit_order'),
     )
 
@@ -177,6 +271,6 @@ class ItineraryAttraction(Base):
         return (
             f"<ItineraryAttraction("
             f"itinerary={self.itinerary_id}, "
-            f"attraction={self.attraction_id}, "
-            f"order={self.visit_order})>"
+            f"day={self. day_id}, "
+            f"attraction={self.attraction_id})>"
         )

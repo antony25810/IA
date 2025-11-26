@@ -41,7 +41,7 @@ def create_user_profile(
     
     Requiere el ID del usuario registrado (user_id).
     """
-    return UserProfileService.create(db, current_user.user_id, data)
+    return UserProfileService.create(db, current_user.id, data)  
 
 
 @router.get(

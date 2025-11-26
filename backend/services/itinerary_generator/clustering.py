@@ -44,11 +44,16 @@ class DayClustering:
         for attr in attractions:
             # Asumimos que 'location' viene o como objeto geoalchemy o tupla
             # Aquí intentamos extraer (lat, lon)
-            lat, lon = 0.0, 0.0
+            lat, lon = None, None
+
             if 'location_coords' in attr:
                 lat, lon = attr['location_coords']
             elif 'latitude' in attr and 'longitude' in attr:
                 lat, lon = attr['latitude'], attr['longitude']
+
+            if lat is None or lon is None:
+                logger.warning(f"Atracción {attr.get('id', '? ')} sin coordenadas válidas, se omitirá")
+                continue  # Saltar esta atracción
             
             points.append({'data': attr, 'coords': (lat, lon)})
 

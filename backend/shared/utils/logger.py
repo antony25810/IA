@@ -8,6 +8,11 @@ def setup_logger(name: str) -> logging.Logger:
     """Configura y retorna un logger"""
     
     logger = logging.getLogger(name)
+    
+    # ✅ Evitar duplicar handlers
+    if logger.handlers:
+        return logger
+    
     logger.setLevel(getattr(logging, settings.LOG_LEVEL))
     
     # Handler para consola

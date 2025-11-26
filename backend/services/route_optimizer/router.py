@@ -100,7 +100,11 @@ def optimize_multi_stop_route(
     waypoints: List[int] = Body(..., min_length=1, description="IDs de atracciones a visitar"),
     end_attraction_id: Optional[int] = Query(None, description="ID destino final (opcional)"),
     optimization_mode: str = Query("balanced", pattern="^(distance|time|cost|balanced|score)$"),
-    attraction_scores: Optional[Dict[Union[int, str], float]] = Body(None),
+    attraction_scores: Optional[Dict[int, float]] = Body(
+        None,
+        description="Scores de idoneidad por atracción",
+        example={1: 95.5, 2: 87.3, 5: 92.0}
+    ),
     db: Session = Depends(get_db)
 ):
     """
@@ -143,7 +147,11 @@ def optimize_multi_stop_route(
 def compare_optimization_modes(
     start_attraction_id: int = Query(..., gt=0),
     end_attraction_id: int = Query(..., gt=0),
-    attraction_scores: Optional[Dict[Union[int, str], float]] = Body(None),
+    attraction_scores: Optional[Dict[int, float]] = Body(
+        None,
+        description="Scores de idoneidad por atracción",
+        example={1: 95.5, 2: 87.3, 5: 92.0}
+    ),
     db: Session = Depends(get_db)
 ):
     """

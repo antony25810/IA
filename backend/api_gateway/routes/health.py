@@ -1,4 +1,5 @@
 # backend/api_gateway/routes/health.py
+from fastapi import Response as response
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -35,6 +36,7 @@ async def database_health(db: Session = Depends(get_db)):
             "postgis_version": postgis_version[0] if postgis_version else "unknown"
         }
     except Exception as e:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE 
         return {
             "status": "unhealthy",
             "database": "postgresql",
@@ -46,7 +48,11 @@ async def database_health(db: Session = Depends(get_db)):
 async def redis_health():
     """Verificar conexión a Redis"""
     try:
-        r = redis.from_url(settings.REDIS_URL)
+        r = redis.from_url(
+            settings.REDIS_URL,
+            socket_connect_timeout=2, 
+            socket_timeout=2
+        )
         r.ping()
         info = r.info()
         
@@ -57,6 +63,7 @@ async def redis_health():
             "version": info.get("redis_version", "unknown")
         }
     except Exception as e:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "unhealthy",
             "cache": "redis",
@@ -113,3 +120,5 @@ async def full_health_check(db: Session = Depends(get_db)):
         "services": services,
         "version": settings.APP_VERSION
     }
+
+    

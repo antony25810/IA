@@ -54,6 +54,12 @@ class UserProfile(Base):
 
     user = relationship("User", back_populates="profile")
 
+    itineraries = relationship(
+        "Itinerary",
+        back_populates="user_profile",
+        cascade="all, delete-orphan"
+    )
+
     # Índices
     __table_args__ = (
         Index('idx_user_preferences', 'preferences', postgresql_using='gin'),

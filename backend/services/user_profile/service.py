@@ -312,7 +312,7 @@ class UserProfileService:
         if budget_range and budget_range.lower() in price_map:
              allowed = price_map[budget_range.lower()]
              # Solo filtrar si tenemos datos de precio en las atracciones
-             # query = query.filter(Attraction.price_range.in_(allowed))
+             query = query.filter(Attraction.price_range.in_(allowed))
              pass 
 
         attractions = query.order_by(
