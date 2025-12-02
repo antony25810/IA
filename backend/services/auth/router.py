@@ -4,12 +4,14 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from shared.database.models.user import User
 from shared.database.base import get_db
 from shared. database.models import UserProfile
 from shared.schemas.user import UserCreate, UserRead
 from shared.schemas.auth import Token, LoginRequest
 from shared.config.settings import get_settings
-from . service import UserService
+from .service import UserService
+from .dependencies import get_current_user
 
 router = APIRouter(
     prefix="/auth",
@@ -58,7 +60,7 @@ def register_user(
         expires_delta=access_token_expires
     )
     
-    # 4. ✅ Retornar datos completos
+    # 4. Retornar datos completos
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -104,7 +106,7 @@ def login_json(
         expires_delta=access_token_expires
     )
     
-    # 4. ✅ Retornar datos completos
+    # 4. Retornar datos completos
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -148,3 +150,11 @@ def login_for_access_token(
         "email": user.email,
         "user_profile_id": user_profile.id if user_profile else None
     }
+
+@router.get("/me", response_model=UserRead)
+def read_users_me(current_user: User = Depends(get_current_user)):
+    """
+    Validar token y obtener usuario actual.
+    Usado por el Frontend al recargar la página para verificar sesión.
+    """
+    return current_user

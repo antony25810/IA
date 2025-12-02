@@ -239,7 +239,7 @@ async def validate_itinerary(
     }
     ```
     """
-    # Llamar al servicio (método REAL: validate_itinerary)
+    # Llamar al servicio
     result = RulesEngineService.validate_itinerary(
         db=db,
         itinerary=request.itinerary,
@@ -284,11 +284,11 @@ async def explain_rules(
     }
     ```
     """
-    # Llamar al servicio (método REAL: explain_rules)
+    # Llamar al servicio 
     result = RulesEngineService.explain_rules(
         db=db,
         user_profile_id=user_profile_id,
-        context=None  # Se puede extender para recibir contexto
+        context=None  
     )
     
     return result
@@ -349,7 +349,7 @@ async def get_recommendations(
         if context.location:
             context_dict['location'] = context.location
     
-    # Llamar al servicio (método REAL: get_recommendations)
+    # Llamar al servicio
     result = RulesEngineService.get_recommendations(
         db=db,
         user_profile_id=user_profile_id,
@@ -387,7 +387,7 @@ async def list_all_rules():
     }
     ```
     """
-    # Llamar al servicio (método REAL: list_all_rules)
+    # Llamar al servicio
     result = RulesEngineService.list_all_rules()
     
     return result

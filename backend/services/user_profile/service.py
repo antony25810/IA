@@ -233,8 +233,6 @@ class UserProfileService:
             Itinerary.status == 'completed'
         ).count()
         
-        # Nota: Se eliminó el cálculo de top_categories por ahora para mantenerlo simple,
-        # ya que depende de joins complejos que podrían requerir más ajustes.
         
         return {
             **profile.__dict__,
@@ -378,7 +376,6 @@ class UserProfileService:
             historical_ratings[str(attraction_id)] = rating
             profile.historical_ratings = historical_ratings
             
-            # flag modified para JSONB mutable si es necesario, aunque reasignar el dict suele funcionar
             from sqlalchemy.orm.attributes import flag_modified
             flag_modified(profile, "historical_ratings")
             

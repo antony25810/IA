@@ -87,7 +87,7 @@ export const loginUser = async (data: {
  * (Llamar al endpoint protegido /users/me)
  */
 export const verifyToken = async (token: string) => {
-    const res = await fetch(`${API_URL}/api/users/me`, {
+    const res = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
             'Authorization': `Bearer ${token}`
         }

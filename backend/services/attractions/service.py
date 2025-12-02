@@ -121,6 +121,7 @@ class AttractionService:
         limit: int = 100,
         destination_id: Optional[int] = None,
         category: Optional[str] = None,
+        search: Optional[str] = None,
         min_rating: Optional[float] = None,
         verified_only: bool = False
     ) -> Tuple[List[Attraction], int]:
@@ -147,6 +148,9 @@ class AttractionService:
         
         if category:
             query = query.filter(Attraction.category == category.lower())
+
+        if search:
+            query = query.filter(Attraction.name.ilike(f"%{search}%"))
         
         if min_rating:
             query = query.filter(Attraction.rating >= min_rating)

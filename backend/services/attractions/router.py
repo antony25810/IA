@@ -76,6 +76,7 @@ def list_attractions(
     limit: int = Query(100, ge=1, le=1000, description="Número máximo de registros"),
     destination_id: Optional[int] = Query(None, description="Filtrar por destino"),
     category: Optional[str] = Query(None, description="Filtrar por categoría"),
+    search: Optional[str] = Query(None, description="Buscar por nombre"),
     min_rating: Optional[float] = Query(None, ge=0.0, le=5.0, description="Rating mínimo"),
     verified_only: bool = Query(False, description="Solo atracciones verificadas"),
     db: Session = Depends(get_db)
@@ -88,6 +89,7 @@ def list_attractions(
     - limit: Paginación - registros por página
     - destination_id: Filtrar por ID de destino
     - category: Filtrar por categoría
+    - search: Buscar por nombre (búsqueda parcial)
     - min_rating: Rating mínimo (0-5)
     - verified_only: Solo mostrar atracciones verificadas
     """
@@ -97,6 +99,7 @@ def list_attractions(
         limit=limit,
         destination_id=destination_id,
         category=category,
+        search=search,
         min_rating=min_rating,
         verified_only=verified_only
     )

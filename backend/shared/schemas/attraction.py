@@ -2,10 +2,12 @@
 """
 Schemas para atracciones turísticas
 """
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, ConfigDict, field_serializer
 from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from datetime import datetime
 from .base import Location, ResponseBase, TimestampMixin
+from geoalchemy2.elements import WKBElement # type: ignore
+from geoalchemy2.shape import to_shape # type: ignore
 
 if TYPE_CHECKING:
     from .destination import DestinationRead
@@ -29,12 +31,14 @@ class AttractionBase(BaseModel):
         if v.lower() not in valid_categories:
             raise ValueError(f'Categoría debe ser una de: {", ".join(valid_categories)}')
         return v.lower()
+    
+    
 
 
 class AttractionCreate(AttractionBase):
     """Schema para crear una atracción"""
     destination_id: int = Field(..., gt=0, description="ID del destino")
-    location: Location = Field(..., description="Coordenadas geográficas")
+    location: Any = Field(..., description="Coordenadas (Lat/Lon dict o WKT string)")
     # Formato: {"lat": -12.0464, "lon": -77.0428}
     
     tags: Optional[List[str]] = Field(None, description="Etiquetas descriptivas")
@@ -46,6 +50,7 @@ class AttractionCreate(AttractionBase):
     accessibility: Optional[Dict[str, bool]] = Field(None, description="Características de accesibilidad")
     extra_data: Optional[Dict[str, Any]] = Field(None, description="Datos adicionales")
     images: Optional[List[Dict[str, str]]] = Field(None, description="URLs de imágenes")
+
     
     @field_validator('price_max')
     @classmethod
@@ -57,7 +62,9 @@ class AttractionCreate(AttractionBase):
                 raise ValueError('price_max debe ser mayor o igual a price_min')
         return v
     
+    
     model_config = ConfigDict(
+        arbitrary_types_allowed=True,
         json_schema_extra={
             "example": {
                 "destination_id": 1,
@@ -113,6 +120,7 @@ class AttractionRead(AttractionBase, ResponseBase, TimestampMixin):
     """Schema para leer una atracción"""
     id: int
     destination_id: int
+    location: Any = Field(..., description="Coordenadas (Lat/Lon dict o WKT string)")
     tags: Optional[List[str]] = None
     average_visit_duration: Optional[int] = None
     price_range: Optional[str] = None
@@ -128,7 +136,31 @@ class AttractionRead(AttractionBase, ResponseBase, TimestampMixin):
     extra_data: Optional[Dict[str, Any]] = None
     images: Optional[List[Dict[str, str]]] = None
     
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
+
+    @field_serializer('location')
+    def serialize_location(self, value, _info):
+        try:
+            # 1. Si es un objeto de Base de Datos (WKBElement)
+            if hasattr(value, 'desc') or isinstance(value, WKBElement):
+                # Convertimos el binario a objeto Python (Shapely)
+                point = to_shape(value)
+                # Retornamos formato texto: "POINT(-99.13 19.43)"
+                return f"POINT({point.x} {point.y})"
+            
+            # 2. Si ya es un string hexadecimal (el caso que te está pasando)
+            if isinstance(value, str) and value.startswith('01010000'):
+                # Es un hex WKB crudo. Como es difícil parsear aquí sin librerías extra,
+                # devolvemos None para que el frontend use el fallback o intentamos pasarlo.
+                # (Normalmente to_shape ya lo maneja antes de que sea string).
+                return value 
+
+            # 3. Si ya es texto o dict, lo dejamos pasar
+            return value
+            
+        except Exception as e:
+            # Si falla la conversión, retornamos string para debug
+            return str(value)
 
 
 class AttractionWithDestination(AttractionRead):

@@ -85,49 +85,51 @@ const RouteTimeline: React.FC<RouteTimelineProps> = ({
     return (
         <div className="route-timeline">
             {schedule.map((item, idx) => (
-                <div key={item.attraction.id} className="timeline-item">
-                    <div className="timeline-marker">
-                        <div className="timeline-dot">{idx + 1}</div>
-                        {idx < schedule.length - 1 && (
-                            <div className="timeline-line"></div>
-                        )}
-                    </div>
-
-                    <div className="timeline-content">
-                        <div className="timeline-time">
-                            <span className="time-arrival">{item.arrivalTime}</span>
-                            <span className="time-separator">→</span>
-                            <span className="time-departure">{item.departureTime}</span>
-                        </div>
-
-                        <div className="timeline-attraction">
-                            <h3>{item.attraction.name}</h3>
-                            {item.attraction.category && (
-                                <span className="attraction-category">{item.attraction.category}</span>
-                            )}
-                            {item.attraction.rating && (
-                                <span className="attraction-rating">⭐ {item.attraction. rating. toFixed(1)}</span>
-                            )}
-                            {item.attraction.address && (
-                                <p className="attraction-address">📍 {item.attraction.address}</p>
+                <div key={`${item.attraction.id}-${idx}`} className="timeline-item">
+                    <div key={item.attraction.id} className="timeline-item">
+                        <div className="timeline-marker">
+                            <div className="timeline-dot">{idx + 1}</div>
+                            {idx < schedule.length - 1 && (
+                                <div className="timeline-line"></div>
                             )}
                         </div>
 
-                        <div className="timeline-duration">
-                            <span className="duration-badge">
-                                ⏱️ {item. visitDuration} min de visita
-                            </span>
-                        </div>
-
-                        {item.travelTime && item.travelTime > 0 && (
-                            <div className="timeline-travel">
-                                <div className="travel-info">
-                                    <span className="travel-icon">{getTransportIcon(item. transportMode)}</span>
-                                    <span className="travel-time">{item.travelTime} min de viaje</span>
-                                    <span className="travel-mode">({item.transportMode})</span>
-                                </div>
+                        <div className="timeline-content">
+                            <div className="timeline-time">
+                                <span className="time-arrival">{item.arrivalTime}</span>
+                                <span className="time-separator">→</span>
+                                <span className="time-departure">{item.departureTime}</span>
                             </div>
-                        )}
+
+                            <div className="timeline-attraction">
+                                <h3>{item.attraction.name}</h3>
+                                {item.attraction.category && (
+                                    <span className="attraction-category">{item.attraction.category}</span>
+                                )}
+                                {item.attraction.rating && (
+                                    <span className="attraction-rating">⭐ {item.attraction. rating. toFixed(1)}</span>
+                                )}
+                                {item.attraction.address && (
+                                    <p className="attraction-address">📍 {item.attraction.address}</p>
+                                )}
+                            </div>
+
+                            <div className="timeline-duration">
+                                <span className="duration-badge">
+                                    ⏱️ {item. visitDuration} min de visita
+                                </span>
+                            </div>
+
+                            {item.travelTime && item.travelTime > 0 && (
+                                <div className="timeline-travel">
+                                    <div className="travel-info">
+                                        <span className="travel-icon">{getTransportIcon(item. transportMode)}</span>
+                                        <span className="travel-time">{item.travelTime} min de viaje</span>
+                                        <span className="travel-mode">({item.transportMode})</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             ))}

@@ -25,10 +25,12 @@ class GraphDataManager:
 
         for attr in attractions:
             lat, lon = None, None
+            location_str = None
             if attr.location is not None:
                 try:
                     point = to_shape(attr.location)
                     lat, lon = point.y, point.x
+                    location_str = f"POINT({lon} {lat})"
                 except Exception:
                     pass
 
@@ -43,6 +45,8 @@ class GraphDataManager:
                 'average_visit_duration': attr.average_visit_duration,
                 'lat': lat,
                 'lon': lon,
+                'location': location_str,
+                'destination_id': attr.destination_id,
                 # --- CAMPOS OBLIGATORIOS PARA PYDANTIC (AttractionRead) ---
                 'destination_id': attr.destination_id,
                 'verified': attr.verified,

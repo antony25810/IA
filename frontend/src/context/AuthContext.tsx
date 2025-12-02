@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { verifyToken } from '../services/authService';
 
 /**
  * Interfaz del usuario autenticado
@@ -33,24 +34,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
 
-    // ✅ Cargar sesión desde localStorage al iniciar
     useEffect(() => {
-        const storedToken = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
-        
-        if (storedToken && storedUser) {
-            try {
-                const userData = JSON. parse(storedUser);
-                setToken(storedToken);
-                setUser(userData);
-            } catch (error) {
-                console. error('Error parsing stored user:', error);
-                localStorage.removeItem('token');
-                localStorage.removeItem('user');
+        const initAuth = async () => {
+            const storedToken = localStorage.getItem('token');
+            const storedUser = localStorage.getItem('user');
+            
+            if (storedToken && storedUser) {
+                try {
+                    // 1. Verificar si el token sigue siendo válido en el Backend
+                    // Si el token expiró (ej: pasaron 30 min), esto lanzará error
+                    await verifyToken(storedToken);
+                    
+                    // 2. Si es válido, restauramos el estado
+                    const userData = JSON.parse(storedUser);
+                    setToken(storedToken);
+                    setUser(userData);
+                } catch (error) {
+                    console.warn('⚠️ Sesión expirada o token inválido. Cerrando sesión...');
+                    // 3. Si falló la verificación, limpiamos todo (Logout forzado)
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    setToken(null);
+                    setUser(null);
+                }
             }
-        }
-        
-        setIsLoading(false);
+            
+            setIsLoading(false);
+        };
+
+        initAuth();
     }, []);
 
     // ✅ Proteger rutas (opcional)

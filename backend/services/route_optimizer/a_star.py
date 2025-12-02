@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from shared.database.models import Attraction
 from shared.utils.logger import setup_logger
-from shared.graph_loader import GraphDataManager # <--- IMPORTANTE
+from shared.graph_loader import GraphDataManager
 from .heuristics import Heuristics, CostCalculator, get_optimization_weights
 from .path_generator import PathGenerator, OptimizedRoute
 
@@ -42,7 +42,7 @@ class AStar:
     def __init__(
         self,
         db: Session,
-        optimization_mode: str = "balanced",
+        optimization_mode: str,
         heuristic_type: str = "euclidean"
     ):
         self.db = db

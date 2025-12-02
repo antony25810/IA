@@ -60,9 +60,9 @@ class UserService:
             )
             
             db.add(db_user)
-            db.flush()  # ✅ Asigna ID al usuario SIN hacer commit
+            db.flush()  # Asigna ID al usuario SIN hacer commit
             
-            # 4. ✅ Crear perfil de usuario automáticamente
+            # 4. Crear perfil de usuario automáticamente
             db_profile = UserProfile(
                 user_id=db_user.id,
                 budget_range="medium",  # Valor por defecto
@@ -81,7 +81,7 @@ class UserService:
             
             logger.info(f"✅ Usuario creado: {db_user.email} (ID: {db_user.id}, Profile ID: {db_profile.id})")
             
-            # ✅ Adjuntar profile_id al objeto user para acceso fácil
+            # Adjuntar profile_id al objeto user para acceso fácil
             db_user.profile_id = db_profile.id
             
             return db_user

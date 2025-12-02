@@ -126,7 +126,6 @@ def get_user_profile_with_stats(
     Obtener perfil con estadísticas completas.
     """
     stats = UserProfileService.get_with_statistics(db, profile_id)
-    # Limpieza interna de SQLAlchemy si es necesario, aunque Pydantic suele manejarlo
     if isinstance(stats, dict) and '_sa_instance_state' in stats:
         stats.pop('_sa_instance_state', None)
     return stats

@@ -139,7 +139,7 @@ export const getAttractionsByDestination = async (
 export const getTopAttractions = async (destinationId: number, limit: number = 10) => {
     const queryParams = new URLSearchParams();
     queryParams.append('destination_id', destinationId.toString());
-    queryParams.append('min_rating', '4.0');
+    queryParams.append('min_rating', '0.0');
     queryParams.append('limit', limit.toString());
     queryParams.append('verified_only', 'true');
 
@@ -204,22 +204,22 @@ export const searchAttractions = async (
 ) => {
     const queryParams = new URLSearchParams();
     queryParams.append('destination_id', destinationId.toString());
+    queryParams.append('search', searchTerm);
     
     if (params?.category) queryParams.append('category', params. category);
     if (params?. limit) queryParams.append('limit', params.limit.toString());
+    
+    const url = `${API_URL}/api/attractions/?${queryParams.toString()}`;
+    console.log("🌐 URL de búsqueda:", url);
 
-    // Nota: El endpoint de búsqueda puede variar según tu backend
-    // Opción 1: Si tienes endpoint /api/attractions/search
-    const response = await fetch(
-        `${API_URL}/api/attractions/? destination_id=${destinationId}&limit=${params?.limit || 10}`,
-        { headers: getAuthHeaders() }
-    );
+    const response = await fetch(url, { headers: getAuthHeaders() });
 
     if (!response.ok) {
         throw new Error('Error buscando atracciones');
     }
 
     const data = await response.json();
+    console.log("📥 Respuesta del servidor:", data);
     const items = data.items || [];
     
     // Filtrar por término de búsqueda en el frontend

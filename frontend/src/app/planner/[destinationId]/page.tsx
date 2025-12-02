@@ -1,6 +1,6 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation'; // Usamos useParams para mayor seguridad
+import React, { useState, useEffect, useRef } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { getDestinationById, searchAttractions } from '../../../services/destinationService';
 import { generateItinerary } from '../../../services/itinerary';
@@ -13,7 +13,6 @@ export default function PlanearPage() {
     const router = useRouter();
     const params = useParams();
     
-    // Aseguramos que destinationId sea un número
     const destId = Number(params.destinationId);
 
     const [destination, setDestination] = useState<Destination | null>(null);
@@ -21,18 +20,19 @@ export default function PlanearPage() {
     const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Formulario
     const [startDate, setStartDate] = useState('');
     const [numDays, setNumDays] = useState(3);
+    
     const [hotelQuery, setHotelQuery] = useState('');
     const [hotelResults, setHotelResults] = useState<any[]>([]);
     const [selectedHotel, setSelectedHotel] = useState<any | null>(null);
+    const [showDropdown, setShowDropdown] = useState(false);
     
-    // Configuración avanzada
     const [optimizationMode, setOptimizationMode] = useState('balanced');
     const [showAdvanced, setShowAdvanced] = useState(false);
 
-    // Cargar datos iniciales
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
         if (!destId) return;
         
@@ -49,17 +49,37 @@ export default function PlanearPage() {
         loadData();
     }, [destId]);
 
-    // Búsqueda de hoteles (Autocomplete)
     useEffect(() => {
         const delayDebounceFn = setTimeout(async () => {
-            if (hotelQuery.length > 2 && !selectedHotel) {
+            console.log("📊 Estado actual:", {
+            hotelQuery,
+            hotelQueryLength: hotelQuery.length,
+            destId,
+            selectedHotel,
+            condicionCumplida: hotelQuery.length > 2 && ! selectedHotel
+            });
+            
+            if (hotelQuery. length > 2 && !selectedHotel) {
                 try {
+                    console.log("🔍 Iniciando búsqueda para:", hotelQuery, "en destino:", destId);
+                    
+                    // Verifica que destId sea válido
+                    if (isNaN(destId) || ! destId) {
+                        console.error("❌ destId inválido:", destId);
+                        return;
+                    }
+                    
                     const results = await searchAttractions(destId, hotelQuery, { limit: 5 });
-                    setHotelResults(results);
+                    console.log("✅ Resultados obtenidos:", results);
+                    console.log("📦 Tipo de results:", typeof results, Array.isArray(results));
+                    
+                    setHotelResults(results || []);
                 } catch (e) {
-                    console.error(e);
+                    console.error("❌ Error en búsqueda:", e);
+                    setHotelResults([]);
                 }
             } else {
+                console.log("⏭️ Búsqueda omitida - condiciones no cumplidas");
                 setHotelResults([]);
             }
         }, 500);
@@ -67,15 +87,40 @@ export default function PlanearPage() {
         return () => clearTimeout(delayDebounceFn);
     }, [hotelQuery, destId, selectedHotel]);
 
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setShowDropdown(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     const handleSelectHotel = (hotel: any) => {
+        console.log("🏨 Hotel seleccionado:", hotel);
         setSelectedHotel(hotel);
         setHotelQuery(hotel.name);
         setHotelResults([]);
+        setShowDropdown(false);
+    };
+
+    const handleClearHotel = () => {
+        setSelectedHotel(null);
+        setHotelQuery('');
+        setHotelResults([]);
+        setShowDropdown(false);
     };
 
     const handleGenerate = async () => {
         if (!user || !startDate) {
-            setError("Por favor completa los campos requeridos.");
+            setError("Por favor selecciona una fecha de inicio.");
+            return;
+        }
+
+        if (hotelQuery.length > 0 && !selectedHotel) {
+            setError("⚠️ Por favor selecciona una opción de la lista de hoteles (haz clic en ella).");
             return;
         }
 
@@ -83,20 +128,24 @@ export default function PlanearPage() {
         setError(null);
 
         try {
-            // 1. Obtener ID de perfil
             const profile = await getUserProfileByUserId(user.id);
             if (!profile) throw new Error("No tienes un perfil creado.");
 
-            // 2. Definir punto de partida
-            // Si no hay hotel, usamos el mismo ID del destino como fallback (o una atracción default)
-            // Nota: El backend espera un ID de atracción válido. Si falla, asegúrate que 'destId' sea válido.
-            const startPointId = selectedHotel ? selectedHotel.id : (await getDestinationById(destId)).id;
+            const hotelId = selectedHotel ? selectedHotel.id : undefined;
+            const defaultCenterId = destination?.id || 1; 
+            const startPointId = selectedHotel ? selectedHotel.id : defaultCenterId;
 
-            // 3. Llamar al generador IA
+            console.log("🚀 Enviando petición de itinerario:", {
+                user_id: profile.id,
+                hotel_id: hotelId, 
+                city_center_id: startPointId,
+                start_date: startDate
+            });
+
             const response = await generateItinerary({
                 user_profile_id: profile.id!,
                 city_center_id: startPointId, 
-                hotel_id: selectedHotel?.id,
+                hotel_id: hotelId,
                 num_days: numDays,
                 start_date: new Date(startDate).toISOString(),
                 optimization_mode: optimizationMode,
@@ -104,7 +153,6 @@ export default function PlanearPage() {
                 max_candidates: 50
             });
 
-            // 4. Redirigir al resultado
             router.push(`/itinerario/${response.itinerary_id}`);
 
         } catch (err: any) {
@@ -125,11 +173,10 @@ export default function PlanearPage() {
             </header>
 
             <div className="planear-grid">
-                {/* COLUMNA IZQUIERDA: Formulario */}
                 <div className="planear-form-card">
-                    <h2>Configuración del Viaje</h2>
+                    <h2>⚙️ Configuración del Viaje</h2>
                     
-                    {error && <div className="error-box" style={{marginBottom: 20}}>{error}</div>}
+                    {error && <div className="error-box">{error}</div>}
 
                     <div className="form-group">
                         <label>📅 Fecha de Inicio</label>
@@ -155,37 +202,52 @@ export default function PlanearPage() {
                         <small>Recomendamos entre 1 y 5 días.</small>
                     </div>
 
-                    <div className="form-group" style={{position: 'relative'}}>
-                        <label>🏨 Punto de Partida (Hotel o Lugar)</label>
+                    <div className="form-group" ref={dropdownRef}>
+                        <label>🏨 Punto de Partida (Opcional)</label>
+                        
                         {!selectedHotel ? (
-                            <input 
-                                type="text" 
-                                placeholder="Buscar hotel o punto de referencia..."
-                                value={hotelQuery}
-                                onChange={(e) => setHotelQuery(e.target.value)}
-                            />
+                            <div className="hotel-search-wrapper">
+                                <input 
+                                    type="text" 
+                                    placeholder="Escribe para buscar hotel o atracción..."
+                                    value={hotelQuery}
+                                    onChange={(e) => {
+                                        setHotelQuery(e.target.value);
+                                        console.log("Buscando:", e.target.value);
+                                    }}
+                                    onFocus={() => {
+                                        if (hotelResults.length > 0) {
+                                            setShowDropdown(true);
+                                        }
+                                    }}
+                                />
+                                
+                                {hotelQuery.length > 2 && hotelResults.length === 0 && !selectedHotel && (
+                                    <div className="search-loading">Buscando...</div>
+                                )}
+                                
+                                {hotelResults.length > 0 && (
+                                    <div className="autocomplete-results">
+                                        {hotelResults.map(hotel => (
+                                            <div 
+                                                key={hotel.id} 
+                                                className="autocomplete-item"
+                                                onClick={() => handleSelectHotel(hotel)}
+                                            >
+                                                <strong>{hotel.name}</strong>
+                                                <small>{hotel.category}</small>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <div className="selected-hotel">
-                                <span>📍 {selectedHotel.name}</span>
-                                <button onClick={() => { setSelectedHotel(null); setHotelQuery(''); }}>✕</button>
+                                <span>📍 <strong>{selectedHotel.name}</strong></span>
+                                <button onClick={handleClearHotel}>✕</button>
                             </div>
                         )}
-                        
-                        {/* Resultados de Autocomplete */}
-                        {hotelResults.length > 0 && (
-                            <div className="autocomplete-results">
-                                {hotelResults.map(hotel => (
-                                    <div 
-                                        key={hotel.id} 
-                                        className="autocomplete-item"
-                                        onClick={() => handleSelectHotel(hotel)}
-                                    >
-                                        <strong>{hotel.name}</strong>
-                                        <small>{hotel.category}</small>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        <small>Si no seleccionas nada, usaremos el centro de la ciudad</small>
                     </div>
 
                     <div className="advanced-section">
@@ -203,59 +265,85 @@ export default function PlanearPage() {
                                     <select 
                                         value={optimizationMode}
                                         onChange={(e) => setOptimizationMode(e.target.value)}
-                                        style={{width: '100%', padding: 10, borderRadius: 8}}
                                     >
                                         <option value="balanced">⚖️ Equilibrado</option>
                                         <option value="score">⭐ Maximizar Calidad</option>
                                         <option value="distance">🚶 Minimizar Distancia</option>
-                                        <option value="cost">💰 Minimizar Costo</option>
+                                        <option value="cost">💰 Económico</option>
                                     </select>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <div style={{marginTop: 30}}>
-                        <button 
-                            className="btn-primary"
-                            onClick={handleGenerate}
-                            disabled={generating}
-                        >
-                            {generating ? (
-                                <span style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10}}>
-                                    <div className="btn-spinner"></div> Generando...
-                                </span>
-                            ) : (
-                                "✨ Generar Itinerario con IA"
-                            )}
-                        </button>
-                    </div>
+                    <button 
+                        className="btn-primary"
+                        onClick={handleGenerate}
+                        disabled={generating}
+                    >
+                        {generating ? (
+                            <span className="btn-loading">
+                                <div className="btn-spinner"></div> Generando tu itinerario...
+                            </span>
+                        ) : (
+                            "✨ Generar Itinerario con IA"
+                        )}
+                    </button>
                 </div>
 
-                {/* COLUMNA DERECHA: Resumen */}
                 <div className="planear-summary-card">
-                    <h2>Resumen</h2>
+                    <h2>📋 Resumen</h2>
+                    
                     <div className="summary-item">
-                        <span className="summary-label">Destino</span>
+                        <span className="summary-label">🌍 Destino</span>
                         <span className="summary-value">{destination.name}, {destination.country}</span>
                     </div>
                     
+                    <div className="summary-item">
+                        <span className="summary-label">📍 Punto de Partida</span>
+                        <span className={`summary-value ${selectedHotel ? 'highlight' : ''}`}>
+                            {selectedHotel ? selectedHotel.name : 'Centro de la ciudad'}
+                        </span>
+                    </div>
+
+                    {startDate && (
+                        <div className="summary-item">
+                            <span className="summary-label">📅 Inicio</span>
+                            <span className="summary-value">
+                                {new Date(startDate).toLocaleDateString('es-MX', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                })}
+                            </span>
+                        </div>
+                    )}
+
+                    {numDays > 0 && (
+                        <div className="summary-item">
+                            <span className="summary-label">⏱️ Duración</span>
+                            <span className="summary-value">{numDays} {numDays === 1 ? 'día' : 'días'}</span>
+                        </div>
+                    )}
+
                     <div className="info-box">
-                        <h4>🤖 ¿Cómo funciona?</h4>
+                        <h4>🤖 ¿Cómo funciona la IA?</h4>
                         <ol>
-                            <li>Analizamos tu <strong>Perfil</strong>.</li>
-                            <li>Buscamos atracciones cerca del <strong>Hotel</strong>.</li>
-                            <li>Aplicamos reglas de <strong>Clima</strong>.</li>
-                            <li>Optimizamos la ruta (A*).</li>
+                            <li>Analizamos tu <strong>perfil de viajero</strong></li>
+                            <li>Buscamos atracciones cerca de tu punto de partida</li>
+                            <li>Aplicamos reglas de <strong>clima y horarios</strong></li>
+                            <li>Optimizamos la ruta con algoritmo A*</li>
+                            <li>Creamos un itinerario personalizado</li>
                         </ol>
                     </div>
 
-                    <div style={{marginTop: 20, textAlign: 'center'}}>
-                        <img 
-                            src={`https://source.unsplash.com/600x400/?${destination.name},city`}
-                            style={{width: '100%', borderRadius: 8}}
-                            alt="Destino" 
-                        />
+                    <div className="destination-preview">
+                        <div className="destination-placeholder">
+                            <div className="placeholder-icon">🌎</div>
+                            <h3>{destination.name}</h3>
+                            <p>{destination.country}</p>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -56,6 +56,7 @@ class ItineraryGeneratorService:
             user_profile_id=user_profile_id,
             max_candidates=max_candidates,
             max_radius_km=max_radius_km,
+            optimization_mode=optimization_mode
         )
         
         raw_candidates = bfs_result['candidates']
@@ -215,7 +216,6 @@ class ItineraryGeneratorService:
                 self.db.add(itinerary_attr)
                 visit_order_global += 1
             
-            # ACUMULACIÓN SEGURA (Sin unarios +)
             total_distance = total_distance + day_distance
             total_time = total_time + day_time
             total_cost = total_cost + day_cost
@@ -287,6 +287,5 @@ class ItineraryGeneratorService:
             scored_list.append({'attraction': attr, 'score': round(score, 2)})
         
         scored_list.sort(key=lambda x: x['score'], reverse=True)
-        valid_candidates = [x for x in scored_list if x['score'] > -50.0]
         
-        return valid_candidates
+        return scored_list

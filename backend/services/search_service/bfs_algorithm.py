@@ -54,7 +54,6 @@ class BFSAlgorithm:
             raise ValueError(f"Atracción de inicio {start_attraction_id} no encontrada")
         
         # 2. CARGAR EL GRAFO EN MEMORIA (Optimización N+1)
-        # Esto usa el código que ya comprobaste que carga 1736 conexiones
         graph = GraphDataManager(self.db, start_node_db.destination_id)
         
         # Inicializar estructuras
@@ -89,8 +88,7 @@ class BFSAlgorithm:
             explored_count += 1
             max_level_reached = max(max_level_reached, current_node.depth)
             
-            # --- AQUI ESTABA EL POSIBLE ERROR ---
-            # Obtenemos datos del DICCIONARIO en RAM, no de la DB
+
             node_data = graph.get_node(current_node.attraction_id)
             
             if not node_data:
