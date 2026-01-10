@@ -4,8 +4,9 @@ from datetime import datetime, timedelta, date
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import to_shape # type: ignore
 
-from shared.database.models import UserProfile, Attraction, Itinerary, ItineraryAttraction, ItineraryDay
+from shared.database.models import UserProfile, Attraction, Itinerary, ItineraryAttraction, ItineraryDay, Destination
 from shared.config.constants import SCORING_WEIGHTS, DEFAULT_VISIT_DURATION
+from shared.config.settings import get_settings
 from services.search_service import SearchService
 from services.route_optimizer import RouterOptimizerService
 from services.rules_engine import RulesEngineService
@@ -20,7 +21,35 @@ class ItineraryGeneratorService:
         self.search_service = SearchService()
         self.optimizer_service = RouterOptimizerService()
 
-    def generate_itinerary(
+    async def _get_weather_context(self, destination_id: int) -> Dict:
+        """Obtener clima real usando OpenWeather si está configurado"""
+        if not get_settings().OPENWEATHER_API_KEY:
+            logger.info("OpenWeather no configurado, usando valores por defecto")
+            return {"condition": "sunny", "temperature": 24}
+        
+        try:
+            from services.external_apis import DataAggregatorService
+            
+            destination = self.db.query(Destination).filter(Destination.id == destination_id).first()
+            if not destination:
+                return {"condition": "sunny", "temperature": 24}
+            
+            aggregator = DataAggregatorService(self.db)
+            weather_data = await aggregator.get_weather_context(
+                lat=destination.latitude,
+                lon=destination.longitude
+            )
+            await aggregator.close()
+            
+            weather = weather_data.get("weather", {})
+            logger.info(f"🌤️ Clima obtenido de OpenWeather: {weather.get('condition')}, {weather.get('temperature')}°C")
+            return weather
+            
+        except Exception as e:
+            logger.warning(f"Error obteniendo clima: {e}, usando valores por defecto")
+            return {"condition": "sunny", "temperature": 24}
+
+    async def generate_itinerary(
         self, 
         user_profile_id: int, 
         destination_id: int,
@@ -35,11 +64,14 @@ class ItineraryGeneratorService:
         
         logger.info(f"🚀 Generando itinerario de {num_days} días para perfil {user_profile_id}")
         
-        # 1. Enriquecer Perfil
+        # 1. Obtener clima real de OpenWeather
+        weather = await self._get_weather_context(destination_id)
+        
+        # 2. Enriquecer Perfil con contexto real
         context = {
             "current_date": start_date,
             "current_time": start_date.time(),
-            "weather": {"condition": "sunny", "temperature": 24}
+            "weather": weather
         }
         
         enrichment_result = RulesEngineService.enrich_user_profile(
@@ -49,7 +81,7 @@ class ItineraryGeneratorService:
         )
         computed_profile = enrichment_result['computed_profile']
 
-        # 2. Exploración BFS
+        # 3. Exploración BFS
         bfs_result = self.search_service.bfs_explore(
             db=self.db,
             start_attraction_id=city_center_attraction_id,
@@ -243,6 +275,13 @@ class ItineraryGeneratorService:
         }
 
     def _rank_candidates(self, candidates_data: List[Dict], profile: Dict) -> List[Dict]:
+        """
+        Rankear candidatos usando múltiples fuentes de datos:
+        - Score de Red Neuronal (nn_score)
+        - Rating de Google Places
+        - Rating y popularidad de Foursquare
+        - Preferencias del usuario
+        """
         scored_list = []
         priority_cats = set(profile.get('priority_categories', []))
         recommended_cats = set(profile.get('recommended_categories', []))
@@ -258,8 +297,33 @@ class ItineraryGeneratorService:
             score = 0.0
             rating = attr.get('rating') or 3.0
             
-            # Cálculos seguros
+            # ═══════════════════════════════════════════════════════════
+            # SCORE DE RED NEURONAL (peso más importante)
+            # nn_score está en rango [0, 1], lo escalamos para que tenga impacto significativo
+            # ═══════════════════════════════════════════════════════════
+            nn_score = item.get('nn_score', 0.5)  # 0.5 es el valor neutro
+            nn_weight = SCORING_WEIGHTS.get('nn_score_weight', 25.0)  # Peso alto para la NN
+            score = score + (nn_score * nn_weight)
+            logger.debug(f"  🧠 NN Score: {nn_score:.3f} → +{nn_score * nn_weight:.1f} puntos")
+            
+            # Base: Rating de Google Places
             score = score + (rating * SCORING_WEIGHTS['rating_multiplier'])
+            
+            # Rating de Foursquare (escala 0-10)
+            foursquare_rating = attr.get('foursquare_rating') or 0.0
+            if foursquare_rating > 0:
+                score = score + (foursquare_rating * SCORING_WEIGHTS['foursquare_rating_multiplier'])
+                logger.debug(f"  📊 Foursquare rating bonus: +{foursquare_rating * SCORING_WEIGHTS['foursquare_rating_multiplier']:.1f}")
+            
+            # Popularidad de Foursquare (0-1)
+            foursquare_popularity = attr.get('foursquare_popularity') or 0.0
+            if foursquare_popularity > 0:
+                score = score + (foursquare_popularity * SCORING_WEIGHTS['foursquare_popularity_multiplier'])
+            
+            # Check-ins de Foursquare
+            foursquare_checkins = attr.get('foursquare_checkins') or 0
+            if foursquare_checkins > 0:
+                score = score + (foursquare_checkins * SCORING_WEIGHTS['foursquare_checkins_bonus'])
             
             cat = attr.get('category', '').lower()
             if cat in priority_cats:

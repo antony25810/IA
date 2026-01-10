@@ -220,7 +220,7 @@ export const searchAttractions = async (
 
     const data = await response.json();
     console.log("📥 Respuesta del servidor:", data);
-    const items = data.items || [];
+    const items = data.items || []; 
     
     // Filtrar por término de búsqueda en el frontend
     return items.filter((attr: any) => 

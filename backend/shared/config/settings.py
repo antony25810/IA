@@ -1,6 +1,7 @@
 # shared/config/settings.py
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from typing import Optional
 
 class Settings(BaseSettings):
     # Application
@@ -26,6 +27,41 @@ class Settings(BaseSettings):
     # ML
     ML_MODEL_PATH: str = "/app/ml_models"
     ML_BATCH_SIZE: int = 32
+    
+    # ═══════════════════════════════════════════════════════════
+    # EXTERNAL APIs
+    # ═══════════════════════════════════════════════════════════
+    
+    # Google Places API
+    # Obtener en: https://console.cloud.google.com/apis/credentials
+    # Límites gratis: $200/mes crédito
+    GOOGLE_PLACES_API_KEY: Optional[str] = None
+    
+    # Foursquare API
+    # Obtener en: https://developer.foursquare.com/
+    # Límites gratis: 200 requests/día
+    FOURSQUARE_API_KEY: Optional[str] = None
+    
+    # OpenWeatherMap API
+    # Obtener en: https://openweathermap.org/api
+    # Límites gratis: 1000 requests/día
+    OPENWEATHER_API_KEY: Optional[str] = None
+    
+    # ═══════════════════════════════════════════════════════════
+    # DATABASE LIMITS (para rendimiento)
+    # ═══════════════════════════════════════════════════════════
+    MAX_ATTRACTIONS_PER_DESTINATION: int = 500
+    MAX_REVIEWS_PER_ATTRACTION: int = 50
+    MAX_CONNECTIONS_PER_ATTRACTION: int = 100
+    
+    # ═══════════════════════════════════════════════════════════
+    # ML Neural Network Settings
+    # ═══════════════════════════════════════════════════════════
+    NN_LEARNING_RATE: float = 0.001
+    NN_EPOCHS: int = 100
+    NN_BATCH_SIZE: int = 32
+    NN_HIDDEN_SIZE: int = 64
+    NN_MODEL_SAVE_PATH: str = "./ml_models/attraction_scorer.pth"
 
     LOG_LEVEL: str = "INFO"
     

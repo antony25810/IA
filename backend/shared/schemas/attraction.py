@@ -26,7 +26,8 @@ class AttractionBase(BaseModel):
         """Validar que la categoría sea válida"""
         valid_categories = [
             'cultural', 'aventura', 'gastronomia', 'naturaleza',
-            'entretenimiento', 'compras', 'religioso', 'historico', 'deportivo'
+            'entretenimiento', 'compras', 'religioso', 'historico', 'deportivo',
+            'otro'  # Para atracciones importadas de APIs externas
         ]
         if v.lower() not in valid_categories:
             raise ValueError(f'Categoría debe ser una de: {", ".join(valid_categories)}')
@@ -126,7 +127,7 @@ class AttractionRead(AttractionBase, ResponseBase, TimestampMixin):
     price_range: Optional[str] = None
     price_min: Optional[float] = None
     price_max: Optional[float] = None
-    opening_hours: Optional[Dict[str, Dict[str, str]]] = None
+    opening_hours: Optional[Any] = None  # Flexible: puede ser Dict o List de strings
     rating: Optional[float] = None
     total_reviews: int
     popularity_score: Optional[float] = None
@@ -135,6 +136,15 @@ class AttractionRead(AttractionBase, ResponseBase, TimestampMixin):
     accessibility: Optional[Dict[str, bool]] = None
     extra_data: Optional[Dict[str, Any]] = None
     images: Optional[List[Dict[str, str]]] = None
+    # Campos de APIs externas
+    google_place_id: Optional[str] = None
+    foursquare_id: Optional[str] = None
+    google_rating: Optional[float] = None
+    google_reviews_count: Optional[int] = None
+    foursquare_rating: Optional[float] = None
+    nn_score: Optional[float] = None  # Score de red neuronal
+    image_url: Optional[str] = None
+    is_active: Optional[bool] = True
     
     model_config = ConfigDict(from_attributes=True, arbitrary_types_allowed=True)
 

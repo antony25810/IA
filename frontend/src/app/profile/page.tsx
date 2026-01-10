@@ -127,24 +127,30 @@ const ProfilePage = () => {
     if (loading) return <div style={{padding: 50, textAlign: 'center'}}>Cargando perfil...</div>;
 
     return (
-        <div style={{minHeight: '100vh', display: 'flex', flexDirection: 'column'}}>
-            <header>
-                <h1>TRIPWISE AI - MI PERFIL</h1>
-                <nav>
-                   <Link href="/Destino">Destinos</Link>
-                   <Link href="/">Salir</Link>
+        <div className="profile-page">
+            {/* HEADER DE NAVEGACIÓN */}
+            <header className="nav-header">
+                <div style={{display: 'flex', alignItems: 'center', gap: 15}}>
+                    <Link href="/Destino" style={{textDecoration: 'none'}}>
+                        <h1 style={{cursor: 'pointer', color: 'white', margin: 0, fontSize: '20px', fontWeight: 700}}>🗺️ RUTAS IA</h1>
+                    </Link>
+                </div>
+                <nav style={{display: 'flex', alignItems: 'center', gap: 20}}>
+                    <Link href="/Destino" style={{color: 'white', textDecoration: 'none', fontWeight: 500}}>Destinos</Link>
+                    <div className="user-avatar">
+                        {user?.name ? user.name.charAt(0).toUpperCase() : '👤'}
+                    </div>
                 </nav>
             </header>
 
             {/* Encabezado de Usuario */}
-            <div className="profile-header">
-                <div className="user-icon" style={{
-                    width: 100, height: 100, margin: '0 auto', 
-                    fontSize: 50, display:'flex', alignItems:'center', justifyContent:'center',
-                    background: 'white', color: '#004a8f'
-                }}>👤</div>
+            <div className="profile-hero">
+                <div className="profile-avatar">
+                    {user?.name ? user.name.charAt(0).toUpperCase() : '👤'}
+                </div>
                 <h2>{user?.name || 'Viajero'}</h2>
                 <p>{user?.email}</p>
+                <span className="profile-badge">{existingProfileId ? '✓ Perfil Configurado' : 'Nuevo Usuario'}</span>
             </div>
 
             <form onSubmit={handleSubmit} className="main-content">
@@ -298,8 +304,8 @@ const ProfilePage = () => {
 
             </form>
             
-            <footer style={{marginTop: 'auto', background: '#004a8f', color: 'white', textAlign: 'center', padding: 15}}>
-                <p>© 2025 TripWise AI</p>
+            <footer className="profile-footer">
+                <p>© 2025 Rutas IA - Tu asistente de viajes inteligente</p>
             </footer>
         </div>
     );

@@ -54,7 +54,7 @@ class BFSAlgorithm:
             raise ValueError(f"Atracción de inicio {start_attraction_id} no encontrada")
         
         # 2. CARGAR EL GRAFO EN MEMORIA (Optimización N+1)
-        graph = GraphDataManager(self.db, start_node_db.destination_id)
+        graph = GraphDataManager(self.db, start_node_db.destination_id) # type: ignore
         
         # Inicializar estructuras
         self.visited = set()

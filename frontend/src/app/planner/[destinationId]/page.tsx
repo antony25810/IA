@@ -1,12 +1,38 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '../../../context/AuthContext';
 import { getDestinationById, searchAttractions } from '../../../services/destinationService';
 import { generateItinerary } from '../../../services/itinerary';
 import { getUserProfileByUserId } from '../../../services/profileService';
 import { Destination } from '../../../types';
 import '../../styles/planear.css';
+
+// Imágenes de destinos populares
+const destinationImages: Record<string, string> = {
+    'mexico': 'https://images.unsplash.com/photo-1518659526054-190340b32735?w=800&h=600&fit=crop',
+    'ciudad de mexico': 'https://images.unsplash.com/photo-1518659526054-190340b32735?w=800&h=600&fit=crop',
+    'cdmx': 'https://images.unsplash.com/photo-1518659526054-190340b32735?w=800&h=600&fit=crop',
+    'cancun': 'https://images.unsplash.com/photo-1552074284-5e88ef1aef18?w=800&h=600&fit=crop',
+    'guadalajara': 'https://images.unsplash.com/photo-1605216663980-b68d16b7b6a7?w=800&h=600&fit=crop',
+    'oaxaca': 'https://images.unsplash.com/photo-1578632292335-df3abbb0d586?w=800&h=600&fit=crop',
+    'paris': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?w=800&h=600&fit=crop',
+    'new york': 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=800&h=600&fit=crop',
+    'tokyo': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&h=600&fit=crop',
+    'london': 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800&h=600&fit=crop',
+    'barcelona': 'https://images.unsplash.com/photo-1583422409516-2895a77efded?w=800&h=600&fit=crop',
+    'rome': 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&h=600&fit=crop',
+    'default': 'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=600&fit=crop'
+};
+
+const getDestinationImage = (name: string): string => {
+    const normalized = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const [key, url] of Object.entries(destinationImages)) {
+        if (normalized.includes(key)) return url;
+    }
+    return destinationImages.default;
+};
 
 export default function PlanearPage() {
     const { user } = useAuth();
@@ -166,17 +192,35 @@ export default function PlanearPage() {
     if (!destination) return <div className="error-box">Destino no encontrado</div>;
 
     return (
-        <div className="planear-container">
-            <header className="planear-header">
-                <h1>Planifica tu viaje a {destination.name}</h1>
-                <p>Configura los detalles y nuestra IA diseñará tu ruta perfecta.</p>
+        <>
+            {/* HEADER DE NAVEGACIÓN */}
+            <header className="nav-header">
+                <div style={{display: 'flex', alignItems: 'center', gap: 15}}>
+                    <Link href="/" style={{textDecoration: 'none'}}>
+                        <h1 style={{cursor: 'pointer', color: 'white', margin: 0, fontSize: '20px', fontWeight: 700}}>🗺️ RUTAS IA</h1>
+                    </Link>
+                </div>
+                <nav style={{display: 'flex', alignItems: 'center', gap: 20}}>
+                    <Link href="/Destino" style={{color: 'white', textDecoration: 'none', fontWeight: 500}}>Destinos</Link>
+                    <Link href="/profile" className="user-icon-link" title="Ir a mi perfil">
+                        <div className="user-icon">
+                            {user?.name ? user.name.charAt(0).toUpperCase() : '👤'}
+                        </div>
+                    </Link>
+                </nav>
             </header>
 
-            <div className="planear-grid">
-                <div className="planear-form-card">
-                    <h2>⚙️ Configuración del Viaje</h2>
-                    
-                    {error && <div className="error-box">{error}</div>}
+            <div className="planear-container">
+                <header className="planear-header">
+                    <h1>Planifica tu viaje a {destination.name}</h1>
+                    <p>Configura los detalles y nuestra IA diseñará tu ruta perfecta.</p>
+                </header>
+
+                <div className="planear-grid">
+                    <div className="planear-form-card">
+                        <h2>⚙️ Configuración del Viaje</h2>
+                        
+                        {error && <div className="error-box">{error}</div>}
 
                     <div className="form-group">
                         <label>📅 Fecha de Inicio</label>
@@ -339,14 +383,24 @@ export default function PlanearPage() {
                     </div>
 
                     <div className="destination-preview">
-                        <div className="destination-placeholder">
-                            <div className="placeholder-icon">🌎</div>
+                        <img 
+                            className="destination-image"
+                            src={getDestinationImage(destination.name)}
+                            alt={destination.name}
+                        />
+                        <div className="destination-overlay">
                             <h3>{destination.name}</h3>
                             <p>{destination.country}</p>
+                            <div className="destination-badges">
+                                <span className="dest-badge">🌟 Popular</span>
+                                <span className="dest-badge">📸 Fotogénico</span>
+                                <span className="dest-badge">🎭 Cultural</span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+        </>
     );
 }

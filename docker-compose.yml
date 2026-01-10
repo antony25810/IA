@@ -78,9 +78,12 @@ services:
       - /app/.next
     ports:
       - "3000:3000"
+    env_file:
+      - ./frontend/.env.local
     environment:
       - API_INTERNAL_URL=http://backend:8000
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY:-AIzaSyCcWIR-ILzBqS8aD3W15s0H74JzVzRHB2I}
     depends_on:
       - backend
 

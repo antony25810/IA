@@ -43,3 +43,41 @@ def get_current_user(
         raise credentials_exception
         
     return user
+
+
+def get_admin_user(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Verifica que el usuario actual sea administrador.
+    Usa este dependency para endpoints que requieren permisos de admin.
+    
+    En modo DEBUG, cualquier usuario autenticado puede actuar como admin.
+    """
+    # En desarrollo, permitir cualquier usuario autenticado
+    if settings.DEBUG:
+        return current_user
+    
+    # En producción, verificar rol de admin
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requieren permisos de administrador"
+        )
+    return current_user
+
+
+def get_optional_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+) -> User | None:
+    """
+    Obtiene el usuario actual si hay token, None si no.
+    Útil para endpoints que funcionan con o sin autenticación.
+    """
+    if not token:
+        return None
+    try:
+        return get_current_user(token, db)
+    except HTTPException:
+        return None

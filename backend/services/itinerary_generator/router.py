@@ -1,10 +1,10 @@
 # backend/services/itinerary_generator/router. py
 """
-Endpoints REST para generación de itinerarios (VERSIÓN MEJORADA)
+Endpoints REST para generación de itinerarios optimizados multi-día.
+Integra OpenWeather para clima real y Foursquare para scoring
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Query
-from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from shared.database.base import get_db
@@ -43,8 +43,8 @@ async def generate_itinerary(
     
     Flujo:
     1. Enriquecimiento de perfil (Rules Engine)
-    2.  Exploración BFS
-    3.  Scoring de candidatos
+    2. Exploración BFS
+    3. Scoring de candidatos
     4. Clustering geográfico
     5. Optimización A* por día
     6. Guardado en BD
@@ -60,8 +60,8 @@ async def generate_itinerary(
         
         hotel_point = request.hotel_id if request.hotel_id else request.city_center_id
         
-        result = await run_in_threadpool(
-            service.generate_itinerary, 
+        # Llamada async directa (ya no usa threadpool)
+        result = await service.generate_itinerary(
             user_profile_id=request.user_profile_id,
             destination_id=center_attr.destination_id,
             city_center_attraction_id=request.city_center_id,

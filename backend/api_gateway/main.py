@@ -20,6 +20,7 @@ from services.route_optimizer import router_optimizer_router
 from services.rules_engine import rules_engine_router
 from services.itinerary_generator import itinerary_router
 from services.auth.router import  router as auth_router
+from services.ml_service import ml_router
 
 
 # Configuración
@@ -160,6 +161,12 @@ app.include_router(
     auth_router,
     prefix="/api",
     tags=["Authentication & Users"]
+)
+
+app.include_router(
+    ml_router,
+    prefix="/api",
+    tags=["Machine Learning & Neural Network Scoring"]
 )
 
 

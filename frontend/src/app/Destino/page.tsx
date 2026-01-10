@@ -9,10 +9,13 @@ import { getRulesRecommendations, buildCurrentContext } from '../../services/rul
 import { Destination, Attraction } from '../../types';
 import '../styles/destino.css';
 
-// Carga dinámica del mapa
-const MapView = dynamic(() => import('../../components/MapView'), {
+// Carga dinámica del mapa Leaflet (gratis, sin API key)
+const LeafletMapView = dynamic(() => import('../../components/LeafletMapView'), {
     ssr: false,
-    loading: () => <div style={{ height: '400px', background: '#f5f5f5', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>Cargando mapa...</div>
+    loading: () => <div style={{ height: '500px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-3"></div>
+      <p>Cargando mapa interactivo...</p>
+    </div>
 });
 
 const DestinosViaje: React.FC = () => {
@@ -55,19 +58,15 @@ const DestinosViaje: React.FC = () => {
     setAiData(null); 
     
     try {
-      // 1. Cargar atracciones (AUMENTADO A 100 PARA VER TODO EL MAPA)
-      // Nota: Si tu servicio getTopAttractions acepta un segundo argumento para límite, úsalo.
-      // Si no, asegúrate de editar destinationService.ts para permitir 'limit'
-      const attrs = await getTopAttractions(dest.id, 100);
-      
-      // 🔥 LOG CRÍTICO: Abre la consola (F12) para ver esto
-      console.log(`📍 Atracciones cargadas para ${dest.name}:`, attrs.length);
-      if(attrs.length > 0) {
-          console.log("🔍 Ejemplo de ubicación cruda (Backend):", attrs[0].location);
-      }
+        // 1. Cargar atracciones (50 para rendimiento óptimo)
+        const attrs = await getTopAttractions(dest.id, 50);
+        
+        console.log(`📍 Atracciones cargadas para ${dest.name}:`, attrs.length);
+        if(attrs.length > 0) {
+            console.log("🔍 Primera atracción:", attrs[0].name, attrs[0].location);
+        }
 
-      setDestAttractions(attrs);
-      
+        setDestAttractions(attrs);
       // 2. IA Recomendaciones
       if (userProfileId) {
         try {
@@ -85,13 +84,13 @@ const DestinosViaje: React.FC = () => {
 
   // ✅ PARSER "A PRUEBA DE BALAS" PARA COORDENADAS
   const getCoordinates = (location: any, name: string = 'Unknown') => {
-    const FALLBACK = { lat: 19.4326, lon: -99.1332 }; // Zócalo CDMX
+    const FALLBACK = { lat: 19.4326, lng: -99.1332 }; // Zócalo CDMX
 
     if (!location) return FALLBACK;
 
     // Caso 1: Objeto ya listo
     if (typeof location === 'object' && 'lat' in location) {
-        return { lat: parseFloat(location.lat), lon: parseFloat(location.lon) };
+        return { lat: parseFloat(location.lat), lng: parseFloat(location.lng || location.lon) };
     }
 
     // Caso 2: String WKT (Cualquier formato con números)
@@ -102,12 +101,12 @@ const DestinosViaje: React.FC = () => {
             const matches = location.match(/(-?\d+\.\d+)\s+(-?\d+\.\d+)/);
             
             if (matches && matches.length >= 3) {
-                const lon = parseFloat(matches[1]); // Primer número es Longitud (X)
+                const lng = parseFloat(matches[1]); // Primer número es Longitud (X)
                 const lat = parseFloat(matches[2]); // Segundo número es Latitud (Y)
                 
                 // Validación básica de latitud/longitud
-                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-                    return { lat, lon };
+                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return { lat, lng };
                 }
             }
         } catch (e) {
@@ -129,7 +128,7 @@ const DestinosViaje: React.FC = () => {
 
   const recommendedItems = getRecommendedAttractions();
 
-  // Mapear marcadores asegurando coordenadas únicas
+  // Mapear marcadores asegurando coordenadas únicas (ya no se usa, pero lo dejamos por compatibilidad)
   const mapMarkers = destAttractions.map((attr, idx) => {
     const coords = getCoordinates(attr.location, attr.name);
     
@@ -139,7 +138,7 @@ const DestinosViaje: React.FC = () => {
         id: attr.id,
         name: attr.name,
         lat: coords.lat,
-        lon: coords.lon,
+        lng: coords.lng,  // Cambiado de lon a lng
         category: attr.category,
         score: isRecommended ? 95 : (attr.rating ? attr.rating * 20 : 50) 
     };
@@ -150,10 +149,12 @@ const DestinosViaje: React.FC = () => {
       {/* HEADER */}
       <header>
         <div style={{display: 'flex', alignItems: 'center', gap: 15}}>
-            <h1>TRIPWISE AI</h1>
+            <Link href="/" style={{textDecoration: 'none'}}>
+              <h1 style={{cursor: 'pointer'}}>🗺️ RUTAS IA</h1>
+            </Link>
         </div>
         <nav style={{display: 'flex', alignItems: 'center', gap: 20}}>
-          <Link href="/Contacto" style={{color: 'white', textDecoration: 'none'}}>Ayuda</Link>
+          <Link href="/Destino" style={{color: 'white', textDecoration: 'none'}}>Destinos</Link>
           <Link href="/profile" className="user-icon-link" title="Ir a mi perfil">
             <div className="user-icon">
                 {user?.name ? user.name.charAt(0).toUpperCase() : '👤'}
@@ -230,18 +231,25 @@ const DestinosViaje: React.FC = () => {
                 </div>
               ) : null}
 
-              {/* MAPA */}
-              <h3 style={{marginTop: 30, color: '#004a8f'}}>📍 Mapa de Atracciones ({destAttractions.length})</h3>
-              
-              {/* Debug visual si no hay atracciones */}
-              {destAttractions.length === 0 && <p style={{color:'red'}}>No se encontraron atracciones para mostrar en el mapa.</p>}
-
-              <div style={{ height: 400, marginTop: 15, borderRadius: 12, overflow: 'hidden', border: '1px solid #eee' }}>
-                 <MapView 
-                    center={getCoordinates(selectedDest.location)}
-                    markers={mapMarkers}
-                    height="100%"
-                 />
+              {/* MAPA CON GOOGLE MAPS */}
+              <div style={{marginTop: 40}}>
+                <h3 style={{marginTop: 0, marginBottom: 20, color: '#004a8f', fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: 10}}>
+                  📍 Explora {destAttractions.length} Atracciones
+                </h3>
+                
+                {destAttractions.length === 0 ? (
+                  <div style={{background: '#fff3cd', padding: 30, borderRadius: 12, textAlign: 'center', color: '#856404'}}>
+                    <p style={{margin: 0, fontSize: '1.1rem'}}>⚠️ No se encontraron atracciones para mostrar</p>
+                  </div>
+                ) : (
+                  <div style={{ height: 600, borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}>
+                     <LeafletMapView 
+                        attractions={destAttractions}
+                        center={getCoordinates(selectedDest.location)}
+                        zoom={13}
+                     />
+                  </div>
+                )}
               </div>
             </>
           ) : (

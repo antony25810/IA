@@ -1,6 +1,7 @@
 # backend/services/router_optimizer/service.py
 """
 Servicio para optimización de rutas usando A*
+Integrado con Red Neuronal para scoring de atracciones
 """
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -10,6 +11,8 @@ from .a_star import AStar
 from .path_generator import OptimizedRoute
 from shared.database. models import Attraction
 from shared.utils.logger import setup_logger
+# Importar el servicio de scoring de la red neuronal
+from services.ml_service.models.inference import get_attraction_scores
 
 logger = setup_logger(__name__)
 
@@ -119,6 +122,10 @@ class RouterOptimizerService:
     ) -> Dict:
         """
         Optimizar ruta con múltiples paradas
+        
+        INTEGRACIÓN CON RED NEURONAL:
+        Si no se proporcionan attraction_scores, se obtienen
+        automáticamente de la red neuronal entrenada
         """
         try:
             if not waypoints:
@@ -139,6 +146,22 @@ class RouterOptimizerService:
             
             if end_attraction_id is None:
                 end_attraction_id = start_attraction_id
+            
+            # ═══════════════════════════════════════════════════════════
+            # OBTENER SCORES DE LA RED NEURONAL SI NO SE PROPORCIONAN
+            # ═══════════════════════════════════════════════════════════
+            
+            if attraction_scores is None:
+                # Recolectar todos los IDs involucrados
+                all_ids = [start_attraction_id, end_attraction_id] + waypoints
+                all_ids = list(set(all_ids))  # Eliminar duplicados
+                
+                # Obtener scores de la red neuronal (con cache)
+                attraction_scores = get_attraction_scores(db, all_ids, use_cache=True)
+                
+                logger.info(f"🧠 Scores NN obtenidos para {len(attraction_scores)} atracciones")
+            
+            # ═══════════════════════════════════════════════════════════
             
             # Inicializar A*
             astar = AStar(

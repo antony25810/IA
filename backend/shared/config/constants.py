@@ -178,6 +178,11 @@ TRANSPORT_BASE_TIMES: Dict[str, float] = {
 }
 
 SCORING_WEIGHTS = {
+    # ═══════════════════════════════════════════════════════════
+    # RED NEURONAL (score más importante)
+    # ═══════════════════════════════════════════════════════════
+    'nn_score_weight': 25.0,      # nn_score (0-1) * 25 = hasta 25 puntos
+    
     # Coincidencias de categoría
     'priority_category': 30.0,    # Categoría prioritaria (ej: Museo en perfil cultural)
     'recommended_category': 15.0, # Categoría recomendada
@@ -190,6 +195,11 @@ SCORING_WEIGHTS = {
     
     # Base
     'rating_multiplier': 10.0,    # Rating 4.5 * 10 = 45 puntos
+    
+    # Foursquare (datos de popularidad)
+    'foursquare_rating_multiplier': 3.0,   # Rating Foursquare (0-10) * 3 = hasta 30 puntos extra
+    'foursquare_popularity_multiplier': 20.0,  # Popularidad (0-1) * 20 = hasta 20 puntos
+    'foursquare_checkins_bonus': 0.001,    # 1000 checkins = 1 punto extra
     
     # Penalización por distancia (BFS)
     'distance_penalty_per_km': 1.0 # -1 punto por cada km de distancia del centro

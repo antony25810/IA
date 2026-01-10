@@ -1,6 +1,7 @@
 # backend/services/search_service/service.py
 """
 Servicio para búsqueda y exploración de atracciones usando BFS
+Integrado con Red Neuronal para scoring de atracciones
 """
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
@@ -15,6 +16,8 @@ from shared.config.constants import(
     get_budget_limits,
     MOBILITY_CONSTRAINTS
 )
+# Importar el servicio de scoring de la red neuronal
+from services.ml_service.models.inference import get_attraction_scores, ScoringService
 
 logger = setup_logger(__name__)
 
@@ -165,9 +168,33 @@ class SearchService:
                 sort_priority
             )
             
+            # ═══════════════════════════════════════════════════════════
+            # INTEGRACIÓN CON RED NEURONAL
+            # Agregar nn_score a cada candidato para uso en optimización
+            # ═══════════════════════════════════════════════════════════
+            
+            # Obtener IDs de todos los candidatos
+            candidate_ids = [c['attraction']['id'] for c in candidates_formatted]
+            
+            # Obtener scores de la red neuronal (con cache)
+            nn_scores = get_attraction_scores(db, candidate_ids, use_cache=True)
+            
+            # Agregar nn_score a cada candidato
+            for candidate in candidates_formatted:
+                attr_id = candidate['attraction']['id']
+                candidate['nn_score'] = nn_scores.get(attr_id, 0.5)
+            
+            # Re-ordenar por nn_score si el modo es "score" o "balanced"
+            if sort_priority in ['rating', 'balanced']:
+                candidates_formatted = sorted(
+                    candidates_formatted,
+                    key=lambda x: x.get('nn_score', 0.5),
+                    reverse=True
+                )
+            
             logger.info(
                 f"BFS completado: {len(candidates_formatted)} candidatos, "
-                f"{result.explored_count} explorados"
+                f"{result.explored_count} explorados, scores NN aplicados"
             )
             
             return {
